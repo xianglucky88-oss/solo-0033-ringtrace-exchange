@@ -76,6 +76,10 @@
     {
       "workflow_id": "concurrent_replay",
       "command": "python3 -B -m tools.smoke --through concurrent_replay"
+    },
+    {
+      "workflow_id": "shoal_absences",
+      "command": "python3 -B -m tools.smoke --through shoal_absences"
     }
   ]
 }

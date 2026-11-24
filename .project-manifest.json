@@ -97,7 +97,9 @@
       "paths": [
         "ringtrace/release_service.py",
         "ringtrace/release_repository.py",
-        "ringtrace/exports.py"
+        "ringtrace/exports.py",
+        "ringtrace/history.py",
+        "ringtrace/absences.py"
       ]
     },
     {
@@ -152,6 +154,14 @@
       {
         "id": "stable_export",
         "description": "从选定封存派生可共享证据与 CSV"
+      },
+      {
+        "id": "historical_rebuild",
+        "description": "只按修订当时已入账资料重建历史快照并补封，不推进工作修订"
+      },
+      {
+        "id": "absence_tracking",
+        "description": "共有移动段逐版在案检查，连续缺席归并并追溯失证与恢复凭据"
       }
     ]
   },
@@ -432,6 +442,28 @@
         "archive",
         "storage",
         "provenance"
+      ]
+    },
+    {
+      "id": "shoal_absences",
+      "name": "追踪换环失证缺席并补封",
+      "entry": "GET /api/releases/{left}/compare/{right}/absences",
+      "steps": [
+        "封存首尾两版共有移动段",
+        "换环使旧环报文失效、移动段中途缺席",
+        "无关入账不拆缺席，补报新环报文恢复移动段",
+        "对缺席修订正式补封并复算下载"
+      ],
+      "success": "缺席段给出首次失证、连续缺席最后一版与恢复修订及凭据，补封幂等且不推进工作修订",
+      "failure": "晚到补报不得回填缺口，补封前后缺席保持同一段",
+      "verification": "python3 -B -m tools.smoke --through shoal_absences",
+      "module_ids": [
+        "release",
+        "projection",
+        "identity",
+        "intake",
+        "http",
+        "browser"
       ]
     }
   ]

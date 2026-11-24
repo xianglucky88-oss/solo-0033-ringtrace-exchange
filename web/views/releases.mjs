@@ -1,5 +1,6 @@
 import { request } from '../client.mjs';
 import { openDetail } from '../dialog.mjs';
+import { loadAbsences } from '../absences.mjs';
 import { differences } from '../differences.mjs';
 import { time } from '../display.mjs';
 import { button, empty, heading, node, select } from '../dom.mjs';
@@ -18,6 +19,7 @@ export function releases({ data, versions, change, run }) {
   header.append(heading('封存对账', '封存当前证据、待复核遭遇与移动断点，可下载成果或用随版输入重新计算。'));
   const freeze = button(`封存修订 ${data.revision}`, () => change(async () => {
     const row = await request('/api/releases', { revision: data.revision });
+    if (row.backfilled) return `已按修订 ${row.revision} 当时入账资料补封，工作修订未推进。`;
     return row.replayed ? `修订 ${row.revision} 已封存。` : `已生成封存版本 ${row.revision}。`;
   }), 'primary');
   freeze.disabled = !data.encounters.length;
@@ -38,6 +40,16 @@ export function releases({ data, versions, change, run }) {
       const diff = await request(`/api/releases/${left.value}/compare/${right.value}`);
       openDetail(`修订 ${diff.from_revision} 对比 ${diff.to_revision}`, differences(diff, data.catalog));
     }));
+    const gapButton = button('查中途缺席', () => run(async () => {
+      const body = await loadAbsences(left.value, right.value, data.catalog,
+        revision => change(async () => {
+          const row = await request('/api/releases', { revision });
+          if (row.backfilled) return `已按修订 ${revision} 当时入账资料补封，工作修订未推进。`;
+          return `修订 ${revision} 已存在封存，回放同一份回执。`;
+        }));
+      openDetail(`修订 ${left.value} → ${right.value} · 中途缺席`, body);
+    }));
+    form.append(gapButton);
     screen.append(form);
   }
   function verify(number) {

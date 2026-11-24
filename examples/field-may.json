@@ -1,0 +1,7 @@
+{
+  "batch": "FIELD-MAY03",
+  "source": "FIELD-NOTE",
+  "reports": [
+    {"report":"N13", "event":"G30", "band":"RING-D", "site":"SAND-ISLET", "kind":"recapture", "observed_at":"2026-05-05T09:00:00+08:00"}
+  ]
+}

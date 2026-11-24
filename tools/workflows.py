@@ -22,8 +22,8 @@ def event(data, reference):
     return next(item for item in data['encounters'] if item['event'] == reference)
 
 
-def edges(data):
-    return {(r['from_event'], r['to_event']) for r in track(data)['segments']}
+def edges(data, root='RING-A'):
+    return {(r['from_event'], r['to_event']) for r in track(data, root)['segments']}
 
 
 class PageAssets(HTMLParser):
@@ -170,7 +170,8 @@ def freeze(client):
     assert edges(after) == {('E10', 'E20'), ('E20', 'E30')}
     assert track(after)['gaps'][0]['events'] == ['E40']
     assert {row['site'] for row in after['coverage'] if row['held_refs']} == {'REED-INLET', 'SALT-FLAT'}
-    client.reject('/api/releases', {'revision': 3}, 409, 'stale_revision')
+    replayed = client.post('/api/releases', {'revision': 3}, expect=200)
+    assert replayed['replayed'] and replayed['sha256'] == first['sha256']
     client.post('/api/releases', {'revision': 4})
     assert client.read('/api/releases/3/compare/4') == projection
     assert [c['revision'] for c in client.read('/api/releases')] == [4, 3]
@@ -236,4 +237,78 @@ def concurrent_replay(client):
     assert next_page['next_offset'] is None
 
 
-STEPS = (shell, ingest, receipts, link, encounters, routes, coverage, impact, provenance, preview, freeze, compare, export, late_boundaries, concurrent_replay)
+def shoal_absences(client):
+    """白沙洲同一只鸟换环失证、无关入账不拆缺席、补报恢复并补封的全程。"""
+    shoal_early = sample('shoal-early.json')
+    field_may = sample('field-may.json')
+    reband_may = sample('reband-may.json')
+    shoal_mid = sample('shoal-mid.json')
+    shoal_late = sample('shoal-late.json')
+    first = client.post('/api/batches', shoal_early)
+    second = client.post('/api/batches', field_may)
+    rev_first, rev_link, rev_mid, rev_last = second['revision'], None, None, None
+    state = client.workspace()
+    assert edges(state, 'RING-D') == {('G10', 'G20'), ('G20', 'G30')}
+    seal_first = client.post('/api/releases', {'revision': rev_first})
+    assert seal_first['replayed'] is False and seal_first['backfilled'] is False
+
+    link = client.post('/api/links', reband_may)
+    rev_link = link['revision']
+    assert rev_link == rev_first + 1
+    after_link = client.workspace()
+    held = event(after_link, 'G30')
+    assert held['state'] == 'held' and held['reason'] == 'inactive_band'
+    assert edges(after_link, 'RING-D') == {('G10', 'G20')}
+
+    unrelated = client.post('/api/batches', shoal_mid)
+    rev_mid = unrelated['revision']
+    assert edges(client.workspace(), 'RING-D') == {('G10', 'G20')}
+
+    recovered = client.post('/api/batches', shoal_late)
+    rev_last = recovered['revision']
+    restored = client.workspace()
+    assert event(restored, 'G30')['state'] == 'confirmed'
+    assert edges(restored, 'RING-D') == {('G10', 'G20'), ('G20', 'G30')}
+    seal_last = client.post('/api/releases', {'revision': rev_last})
+    assert seal_last['backfilled'] is False
+
+    gaps = client.read(f'/api/releases/{rev_first}/compare/{rev_last}/absences')
+    assert [anchor['from_event'] for anchor in gaps['anchors']] == ['G10', 'G20']
+    presence = {row['revision']: row['anchors']['RING-D:G20->G30'] for row in gaps['presence']}
+    assert presence == {rev_first: True, rev_link: False, rev_mid: False, rev_last: True}
+    assert len(gaps['episodes']) == 1
+    episode = gaps['episodes'][0]
+    assert (episode['first_missing'], episode['last_missing'], episode['recovered_revision']) == (
+        rev_link, rev_mid, rev_last)
+    assert episode['missing_revisions'] == [rev_link, rev_mid]
+    assert episode['loss']['cause'] == {'kind': 'proof', 'identifier': 'LINK-MAY04'}
+    assert episode['loss']['proof']['old_band'] == 'RING-D'
+    assert episode['recovery']['cause'] == {'kind': 'batch', 'identifier': 'SHOAL-LATE'}
+    assert [row['report'] for row in episode['recovery']['reports']] == ['S15']
+
+    # 补封缺席修订：不推进工作修订，重复补封回放同一份封存。
+    working = client.workspace()['revision']
+    backfilled = client.post('/api/releases', {'revision': rev_link})
+    assert backfilled['backfilled'] is True and backfilled['replayed'] is False
+    assert client.workspace()['revision'] == working
+    again = client.post('/api/releases', {'revision': rev_link}, expect=200)
+    assert again['replayed'] is True and again['sha256'] == backfilled['sha256']
+    check = client.read(f'/api/releases/{rev_link}/verify')
+    evidence = client.call(f'/api/releases/{rev_link}/evidence.json').json()
+    assert check['matches'] and check['verified_batches'] == len(evidence['batches'])
+    routes3 = client.call(f'/api/releases/{rev_link}/routes.csv').body.decode('utf-8-sig')
+    assert 'G30' not in routes3 and 'G10' in routes3
+
+    # 补封前后、以及再收新包后，缺席段保持同一段。
+    before_seals = client.read(f'/api/releases/{rev_first}/compare/{rev_last}/absences')
+    client.post('/api/releases', {'revision': rev_mid})
+    client.post('/api/batches', {'batch': 'SHOAL-AFTER', 'source': 'DUNE-DESK', 'reports': [
+        dict(shoal_late['reports'][0], report='S16', event='G50', site='SALT-FLAT',
+             observed_at='2026-05-07T09:00:00+08:00')]})
+    assert client.workspace()['revision'] == rev_last + 1
+    assert client.read(f'/api/releases/{rev_first}/compare/{rev_last}/absences') == before_seals == gaps
+    client.reject('/api/releases', {'revision': rev_last + 100}, 409, 'stale_revision')
+    client.call(f'/api/releases/{rev_last + 100}/compare/{rev_last}/absences', expect=404)
+
+
+STEPS = (shell, ingest, receipts, link, encounters, routes, coverage, impact, provenance, preview, freeze, compare, export, late_boundaries, concurrent_replay, shoal_absences)

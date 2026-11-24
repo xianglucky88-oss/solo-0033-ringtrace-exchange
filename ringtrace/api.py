@@ -2,7 +2,7 @@ import re
 import sqlite3
 
 from . import (
-    band_service, batch_archive, batch_service, exports, impact, intake_preview,
+    absences, band_service, batch_archive, batch_service, exports, impact, intake_preview,
     provenance, release_repository, release_service, search_query, static, workbench,
 )
 from .errors import DomainError
@@ -66,6 +66,8 @@ class Application:
                 return json_response(start, impact.preview(connection, match[1]))
             if match := re.fullmatch(f'/api/releases/{REV}/compare/{REV}', path, re.ASCII):
                 return json_response(start, release_service.reconcile(connection, revision(int(match[1])), revision(int(match[2]))))
+            if match := re.fullmatch(f'/api/releases/{REV}/compare/{REV}/absences', path, re.ASCII):
+                return json_response(start, absences.build(connection, revision(int(match[1])), revision(int(match[2]))))
             if match := re.fullmatch(rf'/api/releases/{REV}/(verify|evidence\.json|routes\.csv)', path, re.ASCII):
                 number = revision(int(match[1]))
                 if match[2] == 'verify':

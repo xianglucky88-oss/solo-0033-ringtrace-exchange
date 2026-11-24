@@ -1,0 +1,7 @@
+{
+  "batch": "SHOAL-LATE",
+  "source": "DUNE-DESK",
+  "reports": [
+    {"report":"S15", "event":"G30", "band":"RING-E", "site":"SAND-ISLET", "kind":"recapture", "observed_at":"2026-05-05T09:00:00+08:00"}
+  ]
+}

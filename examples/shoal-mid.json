@@ -1,0 +1,7 @@
+{
+  "batch": "SHOAL-MID",
+  "source": "DUNE-DESK",
+  "reports": [
+    {"report":"S14", "event":"G40", "band":"RING-F", "site":"REED-INLET", "kind":"mark", "observed_at":"2026-05-06T09:00:00+08:00"}
+  ]
+}
