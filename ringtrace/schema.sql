@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS input_batch (
   sha256 TEXT NOT NULL,
   count INTEGER NOT NULL,
   revision INTEGER NOT NULL UNIQUE,
+  assignment_key TEXT NOT NULL DEFAULT '',
   UNIQUE (batch, source)
 );
 CREATE TABLE IF NOT EXISTS observation (
@@ -33,6 +34,38 @@ CREATE TABLE IF NOT EXISTS band_link (
   effective_at TEXT NOT NULL,
   revision INTEGER NOT NULL UNIQUE,
   CHECK (old_band <> new_band)
+);
+CREATE TABLE IF NOT EXISTS event_correction (
+  revision INTEGER PRIMARY KEY,
+  source_event TEXT NOT NULL,
+  first_event TEXT NOT NULL,
+  second_event TEXT NOT NULL,
+  CHECK (source_event <> first_event),
+  CHECK (source_event <> second_event),
+  CHECK (first_event <> second_event)
+);
+CREATE TABLE IF NOT EXISTS event_assignment (
+  source TEXT NOT NULL,
+  report TEXT NOT NULL,
+  correction_revision INTEGER NOT NULL,
+  original_event TEXT NOT NULL,
+  event TEXT NOT NULL,
+  PRIMARY KEY (source, report, correction_revision),
+  FOREIGN KEY (source, report) REFERENCES observation (source, report),
+  FOREIGN KEY (correction_revision) REFERENCES event_correction (revision)
+);
+CREATE INDEX IF NOT EXISTS idx_event_assignment_report ON event_assignment (source, report, correction_revision);
+CREATE TABLE IF NOT EXISTS intake_routing (
+  batch TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  source TEXT NOT NULL,
+  report TEXT NOT NULL,
+  original_event TEXT NOT NULL,
+  event TEXT NOT NULL,
+  PRIMARY KEY (batch, position),
+  UNIQUE (source, report),
+  FOREIGN KEY (batch, source) REFERENCES input_batch (batch, source),
+  FOREIGN KEY (source, report) REFERENCES observation (source, report)
 );
 CREATE TABLE IF NOT EXISTS release (
   revision INTEGER PRIMARY KEY,

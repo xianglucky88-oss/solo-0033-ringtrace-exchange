@@ -3,6 +3,9 @@ from pathlib import Path
 import sqlite3
 
 
+SCHEMA_PATH = Path(__file__).with_name('schema.sql')
+
+
 class Database:
     def __init__(self, path):
         self.path = Path(path)
@@ -21,8 +24,14 @@ class Database:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as connection:
             connection.execute('PRAGMA journal_mode = WAL')
-            schema = Path(__file__).with_name('schema.sql').read_text(encoding='utf-8')
+            schema = SCHEMA_PATH.read_text(encoding='utf-8')
             connection.executescript(f'BEGIN IMMEDIATE;\n{schema}\nCOMMIT;')
+            self._migrate(connection)
+
+    def _migrate(self, connection):
+        columns = {row[1] for row in connection.execute('PRAGMA table_info(input_batch)')}
+        if 'assignment_key' not in columns:
+            connection.execute("ALTER TABLE input_batch ADD COLUMN assignment_key TEXT NOT NULL DEFAULT ''")
 
     @contextmanager
     def transaction(self, *, write=False):

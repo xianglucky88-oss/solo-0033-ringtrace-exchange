@@ -1,13 +1,15 @@
 """Walk through the public example and its distinct failure paths."""
 import csv
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier
+from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path
+from threading import Barrier
 from urllib.parse import urlencode
 
 from ringtrace.codec import canonical, decode, digest
 from ringtrace.seed import EXAMPLES
+from ringtrace.snapshot import assemble
 
 
 def sample(filename):
@@ -48,9 +50,11 @@ def shell(client):
     for url in parser.paths:
         assert client.call(url).headers['X-Content-Type-Options'] == 'nosniff'
     root = Path(__file__).resolve().parents[1] / 'web'
-    for module in root.rglob('*.mjs'):
+    modules = sorted(root.rglob('*.mjs'))
+    for module in modules:
         asset = client.call(f'/assets/{module.relative_to(root)}')
         assert asset.headers['Content-Type'].startswith('text/javascript')
+    assert b'href="#corrections"' in page.body
     client.call('/assets/does-not-exist.mjs', expect=404)
 
 
@@ -236,4 +240,152 @@ def concurrent_replay(client):
     assert next_page['next_offset'] is None
 
 
-STEPS = (shell, ingest, receipts, link, encounters, routes, coverage, impact, provenance, preview, freeze, compare, export, late_boundaries, concurrent_replay)
+def split_correction(client):
+    # Build a self-contained held encounter: two highest-priority recaptures at the
+    # reband moment and one hour later, plus a lower-priority paper note, all under G90.
+    client.post('/api/batches', {'batch': 'SPLIT-DESK', 'source': 'DUNE-DESK', 'reports': [
+        {'report': 'G1', 'event': 'G90', 'band': 'RING-B', 'site': 'SAND-ISLET',
+         'kind': 'recapture', 'observed_at': '2026-04-03T22:00:00Z'},
+        {'report': 'G2', 'event': 'G90', 'band': 'RING-B', 'site': 'SAND-ISLET',
+         'kind': 'recapture', 'observed_at': '2026-04-03T23:00:00Z'},
+    ]})
+    client.post('/api/batches', {'batch': 'SPLIT-NOTE', 'source': 'FIELD-NOTE', 'reports': [
+        {'report': 'G9', 'event': 'G90', 'band': 'RING-A', 'site': 'SAND-ISLET',
+         'kind': 'recapture', 'observed_at': '2026-04-03T22:00:00Z'},
+    ]})
+    held = event(client.workspace(), 'G90')
+    assert held['state'] == 'held' and held['reason'] == 'peer_conflict'
+    base = client.workspace()['revision']
+    valid = {'event': 'G90', 'base_revision': base, 'groups': [
+        {'event': 'G90A', 'reports': [
+            {'source': 'DUNE-DESK', 'report': 'G1'},
+            {'source': 'FIELD-NOTE', 'report': 'G9'}]},
+        {'event': 'G90B', 'reports': [{'source': 'DUNE-DESK', 'report': 'G2'}]}]}
+    # Invalid corrections never move the revision: missing, duplicate, foreign, taken, empty, stale.
+    client.reject('/api/event-corrections', {**valid, 'groups': [
+        valid['groups'][0], {'event': 'G90B', 'reports': []}]}, 400, 'empty_group')
+    client.reject('/api/event-corrections', {**valid, 'groups': [
+        {'event': 'G90A', 'reports': [
+            {'source': 'DUNE-DESK', 'report': 'G1'},
+            {'source': 'FIELD-NOTE', 'report': 'G9'}]},
+        {'event': 'G90B', 'reports': [
+            {'source': 'FIELD-NOTE', 'report': 'G9'}]}]}, 400, 'duplicate_assignment')
+    client.reject('/api/event-corrections', {**valid, 'groups': [
+        {'event': 'G90A', 'reports': [
+            {'source': 'DUNE-DESK', 'report': 'G1'},
+            {'source': 'FIELD-NOTE', 'report': 'G9'},
+            {'source': 'DUNE-DESK', 'report': 'D20'}]},
+        valid['groups'][1]]}, 400, 'foreign_report')
+    client.reject('/api/event-corrections', {**valid, 'groups': [
+        {'event': 'E40', 'reports': valid['groups'][0]['reports']},
+        valid['groups'][1]]}, 409, 'event_taken')
+    # Both groups non-empty, but G2 is left unassigned entirely.
+    client.reject('/api/event-corrections', {**valid, 'groups': [
+        {'event': 'G90A', 'reports': [
+            {'source': 'DUNE-DESK', 'report': 'G1'}]},
+        {'event': 'G90B', 'reports': [
+            {'source': 'FIELD-NOTE', 'report': 'G9'}]}]}, 400, 'missing_assignment')
+    client.reject('/api/event-corrections', {**valid, 'base_revision': base - 1}, 409, 'stale_revision')
+    assert client.workspace()['revision'] == base
+    # Preview is read-only and shows the source encounter replaced by two new ones.
+    preview = client.post('/api/event-correction-previews', valid, expect=200)
+    assert preview['base_revision'] == base and preview['revision'] == base + 1
+    assert {row['key'] for row in preview['diff']['encounters']} == {'G90', 'G90A', 'G90B'}
+    assert client.workspace()['revision'] == base
+    # One successful correction advances exactly one revision.
+    committed = client.post('/api/event-corrections', valid, headers={'If-Match': f'"{base}"'})
+    assert committed['revision'] == base + 1 and committed['count'] == 3
+    state = client.workspace()
+    assert state['revision'] == base + 1 and 'G90' not in {row['event'] for row in state['encounters']}
+    first, second = event(state, 'G90A'), event(state, 'G90B')
+    assert first['state'] == second['state'] == 'confirmed'
+    assert {row['report'] for row in first['candidates']} == {'G1', 'G9'}
+    assert {row['report'] for row in second['candidates']} == {'G2'}
+    # The two valid recaptures retain their one-hour spacing and independent adjudication.
+    first_at = datetime.fromisoformat(first['observed_at'])
+    second_at = datetime.fromisoformat(second['observed_at'])
+    assert int((second_at - first_at).total_seconds()) == 3600
+    assert first['root'] == second['root'] == 'RING-A' and first['site'] == second['site']
+    # With no held encounter between them, an isolated timeline turns them into a stay.
+    isolated = assemble(0, state['catalog'], [], [
+        {**row, 'batch': 'ISO', 'position': index}
+        for index, row in enumerate(first['candidates'] + second['candidates'], 1)],
+        state['links'], state['corrections'])
+    stay = next(segment for track in isolated['routes'] for segment in track['segments']
+                if segment['from_event'] == 'G90A' and segment['to_event'] == 'G90B')
+    assert stay['kind'] == 'stay' and stay['elapsed_seconds'] == 3600
+    # Original numbering is preserved on every candidate.
+    for encounter in (first, second):
+        assert all(row['original_event'] == 'G90' for row in encounter['candidates'])
+    # Old number resolves to the live descendants; a new number shows only its own reports.
+    old = client.read('/api/provenance?reference=G90')
+    assert {row['event'] for row in old['items']} == {'G90A', 'G90B'}
+    new = client.read('/api/provenance?reference=G90A')
+    assert {row['report'] for row in new['items']} == {'G1', 'G9'}
+    # The correction ledger records source, new numbers and every assignment.
+    ledger = client.read('/api/corrections')['corrections']
+    record = next(row for row in ledger if row['source_event'] == 'G90')
+    assert record['first_event'] == 'G90A' and record['second_event'] == 'G90B'
+    assert len(record['assignments']) == 3
+    # The sealed pre-correction revision still recalculates from its own inputs.
+    assert client.read('/api/releases/4/verify')['matches']
+    current = client.workspace()['revision']
+    client.post('/api/releases', {'revision': current})
+    assert client.read(f'/api/releases/{current}/verify')['matches']
+
+
+def paper_routing(client):
+    base = client.workspace()['revision']
+    paper = {'batch': 'PAPER-ROUTE', 'source': 'FIELD-NOTE', 'reports': [
+        {'report': 'F77', 'event': 'G90', 'band': 'RING-B', 'site': 'SAND-ISLET',
+         'kind': 'recapture', 'observed_at': '2026-04-03T22:30:00Z'}]}
+    # A package still using the old number must confirm line-by-line routing.
+    client.reject('/api/batches', paper, 400, 'routing_required')
+    envelope = {'package': paper, 'routing': [{'position': 1, 'event': 'G90A'}]}
+    client.reject('/api/batches',
+                  {'package': paper, 'routing': [{'position': 1, 'event': 'E99'}]},
+                  400, 'routing_conflict')
+    receipt = client.post('/api/batches', envelope)
+    assert receipt['revision'] == base + 1 and receipt['count'] == 1
+    # Identical content and routing returns the original receipt; any change conflicts.
+    replay = client.post('/api/batches', envelope, expect=200)
+    assert replay['replayed'] and replay['revision'] == receipt['revision']
+    client.reject('/api/batches',
+                  {'package': paper, 'routing': [{'position': 1, 'event': 'G90B'}]},
+                  409, 'routing_conflict')
+    # A plain resubmission drops the confirmed routing, so it is also a changed-envelope conflict.
+    client.reject('/api/batches', paper, 409, 'routing_conflict')
+    # The archive keeps the original number, line order and timezone spelling.
+    raw = client.call('/api/batches/PAPER-ROUTE/source.json').body
+    assert raw == canonical(paper)
+    detail = client.read('/api/batches/PAPER-ROUTE')
+    row = detail['reports'][0]
+    assert row['event'] == 'G90A' and row['original_event'] == 'G90'
+    state = client.workspace()
+    target = event(state, 'G90A')
+    assert any(row['report'] == 'F77' and row['original_event'] == 'G90' for row in target['candidates'])
+    follow = {'batch': 'PAPER-TWO', 'source': 'FIELD-NOTE', 'reports': [
+        {'report': 'F88', 'event': 'G90', 'band': 'RING-B', 'site': 'SAND-ISLET',
+         'kind': 'recapture', 'observed_at': '2026-04-03T22:05:00Z'},
+        {'report': 'F89', 'event': 'G90', 'band': 'RING-B', 'site': 'SAND-ISLET',
+         'kind': 'recapture', 'observed_at': '2026-04-03T23:05:00Z'}]}
+    # One package can supplement both new groups; missing one line's confirmation rejects it.
+    client.reject('/api/batches', {'package': follow, 'routing': [
+        {'position': 1, 'event': 'G90A'}]}, 400, 'routing_required')
+    client.post('/api/batches', {'package': follow, 'routing': [
+        {'position': 1, 'event': 'G90A'}, {'position': 2, 'event': 'G90B'}]})
+    state = client.workspace()
+    leaves = {row['event'] for encounter in state['encounters'] for row in encounter['candidates']
+              if row['report'] in ('F88', 'F89')}
+    assert leaves == {'G90A', 'G90B'}
+    assert client.call('/api/batches/PAPER-TWO/source.json').body == canonical(follow)
+    # The old number still finds every report through the correction alias.
+    hits = client.read('/api/provenance?reference=G90')
+    assert {row['event'] for row in hits['items']} >= {'G90A', 'G90B'}
+    current = client.workspace()['revision']
+    client.post('/api/releases', {'revision': current})
+    assert client.read(f'/api/releases/{current}/verify')['matches']
+
+
+STEPS = (shell, ingest, receipts, link, encounters, routes, coverage, impact, provenance, preview,
+         freeze, compare, export, late_boundaries, concurrent_replay, split_correction, paper_routing)

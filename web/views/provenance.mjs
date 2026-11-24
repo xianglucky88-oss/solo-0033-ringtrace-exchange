@@ -23,8 +23,9 @@ function filters(catalog) {
 
 function results(page, catalog) {
   if (!page.items.length) return empty('没有符合条件的原始报文。');
-  return table(['来源报文', '原包 / 行号', '遭遇', '报文环号 → 当前环根', '标准时刻', '样地', '裁决'], page.items.map(row => [
+  return table(['来源报文', '原包 / 行号', '当前遭遇', '原遭遇号', '报文环号 → 当前环根', '标准时刻', '样地', '裁决'], page.items.map(row => [
     `${catalog.sources[row.source].label} · ${row.report}`, `${row.batch} / ${row.position}`, row.event,
+    row.original_event && row.original_event !== row.event ? row.original_event : '—',
     `${row.band} → ${row.root}`, time(row.observed_at), location(catalog, row.site),
     badge(row.decision === 'confirmed' ? '已确认' : '待复核', row.decision === 'confirmed' ? 'good' : 'warn'),
   ]), '报文追溯结果');

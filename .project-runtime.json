@@ -76,6 +76,14 @@
     {
       "workflow_id": "concurrent_replay",
       "command": "python3 -B -m tools.smoke --through concurrent_replay"
+    },
+    {
+      "workflow_id": "split_correction",
+      "command": "python3 -B -m tools.smoke --through split_correction"
+    },
+    {
+      "workflow_id": "paper_routing",
+      "command": "python3 -B -m tools.smoke --through paper_routing"
     }
   ]
 }

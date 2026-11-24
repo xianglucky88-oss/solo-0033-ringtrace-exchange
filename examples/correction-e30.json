@@ -1,0 +1,19 @@
+{
+  "event": "E30",
+  "base_revision": 4,
+  "groups": [
+    {
+      "event": "E30A",
+      "reports": [
+        {"source": "DUNE-DESK", "report": "D30"},
+        {"source": "MUD-DESK", "report": "M31"}
+      ]
+    },
+    {
+      "event": "E30B",
+      "reports": [
+        {"source": "FIELD-NOTE", "report": "F22"}
+      ]
+    }
+  ]
+}

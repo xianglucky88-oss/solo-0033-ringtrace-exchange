@@ -1,0 +1,14 @@
+{
+  "package": {
+    "batch": "PAPER-FOLLOWUP",
+    "source": "FIELD-NOTE",
+    "reports": [
+      {"report": "F60", "event": "E30", "band": "RING-B", "site": "SAND-ISLET", "kind": "recapture", "observed_at": "2026-04-03T22:40:00Z"},
+      {"report": "F61", "event": "E30", "band": "RING-B", "site": "SAND-ISLET", "kind": "recapture", "observed_at": "2026-04-03T23:20:00Z"}
+    ]
+  },
+  "routing": [
+    {"position": 1, "event": "E30A"},
+    {"position": 2, "event": "E30B"}
+  ]
+}

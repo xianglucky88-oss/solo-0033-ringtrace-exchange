@@ -33,8 +33,8 @@
     },
     {
       "id": "archive",
-      "name": "报文持久化与原包归档",
-      "responsibilities": "报文持久化与原包归档",
+      "name": "报文持久化、逐行归属与原包归档",
+      "responsibilities": "报文持久化、逐行归属与原包归档",
       "paths": [
         "ringtrace/batch_repository.py",
         "ringtrace/batch_archive.py",
@@ -88,6 +88,16 @@
       "paths": [
         "ringtrace/provenance.py",
         "ringtrace/search_query.py"
+      ]
+    },
+    {
+      "id": "correction",
+      "name": "遭遇拆分更正与旧号归属",
+      "responsibilities": "遭遇拆分更正与旧号归属",
+      "paths": [
+        "ringtrace/correction_engine.py",
+        "ringtrace/correction_service.py",
+        "ringtrace/correction_repository.py"
       ]
     },
     {
@@ -432,6 +442,46 @@
         "archive",
         "storage",
         "provenance"
+      ]
+    },
+    {
+      "id": "split_correction",
+      "name": "拆分留置遭遇并保留原编号",
+      "entry": "POST /api/event-corrections",
+      "steps": [
+        "构造同级时刻冲突的留置遭遇",
+        "试算并驳回漏分、重分、混入、占号和过期请求",
+        "执行一次成功更正并独立裁决两个新号"
+      ],
+      "success": "整次校验失败不推进修订，成功只推进一次且原编号可追溯",
+      "failure": "旧封存仍按原件复算，新号只含实际归入的报文",
+      "verification": "python3 -B -m tools.smoke --through split_correction",
+      "module_ids": [
+        "http",
+        "correction",
+        "decision",
+        "projection",
+        "release"
+      ]
+    },
+    {
+      "id": "paper_routing",
+      "name": "旧号纸质包逐行归属受理",
+      "entry": "POST /api/batches",
+      "steps": [
+        "提交仍写旧号的信封采集包",
+        "逐行确认归入当前新号并校验重放冲突",
+        "用一个包补入两个新号并复算封存"
+      ],
+      "success": "漏选错选整包不入账，内容与归属都相同才返回原回执",
+      "failure": "原包下载保留原编号、行序和时区写法",
+      "verification": "python3 -B -m tools.smoke --through paper_routing",
+      "module_ids": [
+        "http",
+        "intake",
+        "archive",
+        "correction",
+        "release"
       ]
     }
   ]

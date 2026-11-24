@@ -2,8 +2,9 @@ import re
 import sqlite3
 
 from . import (
-    band_service, batch_archive, batch_service, exports, impact, intake_preview,
-    provenance, release_repository, release_service, search_query, static, workbench,
+    band_service, batch_archive, batch_service, correction_repository,
+    correction_service, exports, impact, intake_preview, provenance, release_repository,
+    release_service, search_query, static, workbench,
 )
 from .errors import DomainError
 from .fields import exact_fields, revision
@@ -56,6 +57,8 @@ class Application:
                 return json_response(start, provenance.search(connection, query))
             if path == '/api/releases':
                 return json_response(start, release_repository.headers(connection))
+            if path == '/api/corrections':
+                return json_response(start, {'corrections': correction_repository.list_with_assignments(connection)})
             if match := re.fullmatch('/api/batches/' + IDENTIFIER + r'/source\.json', path):
                 receipt = batch_service.receipt(connection, match[1])
                 payload = batch_archive.verified_payload(receipt, receipt['reports'])
@@ -77,18 +80,25 @@ class Application:
         raise DomainError('not_found', '未找到请求入口。', 404)
 
     def write(self, path, environ, start):
-        if path not in {'/api/batches', '/api/batch-previews', '/api/links', '/api/releases'}:
+        if path not in {'/api/batches', '/api/batch-previews', '/api/links', '/api/releases',
+                        '/api/event-corrections', '/api/event-correction-previews'}:
             raise DomainError('not_found', '未找到请求入口。', 404)
         data = body(environ)
         if path == '/api/batch-previews':
             with self.database.transaction() as connection:
                 return json_response(start, intake_preview.predict(connection, data))
+        if path == '/api/event-correction-previews':
+            with self.database.transaction() as connection:
+                return json_response(start, correction_service.preview(connection, data))
         with self.database.transaction(write=True) as connection:
             if path == '/api/batches':
                 expected = batch_precondition(environ.get('HTTP_IF_MATCH'))
                 result = batch_service.ingest(connection, data, expected)
             elif path == '/api/links':
                 result = band_service.register(connection, data)
+            elif path == '/api/event-corrections':
+                expected = batch_precondition(environ.get('HTTP_IF_MATCH'))
+                result = correction_service.commit(connection, data, expected)
             else:
                 exact_fields(data, 'revision')
                 result = release_service.freeze(connection, revision(data['revision']))

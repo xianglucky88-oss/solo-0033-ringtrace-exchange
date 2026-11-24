@@ -25,8 +25,10 @@ export function batches(ctx) {
     const details = node('div', null, 'stack');
     const archive = node('a', '下载原包 JSON');
     archive.href = `/api/batches/${batch}/source.json`;
-    details.append(node('p', `摘要 ${row.sha256}`, 'digest'), archive, table(['原包行号', '报文', '遭遇引用', '环号', '录入时刻', '标准时刻'],
-      row.reports.map(report => [report.position, report.report, report.event, report.band, report.recorded_at, time(report.observed_at)]), '原始报文'));
+    details.append(node('p', `摘要 ${row.sha256}`, 'digest'), archive, table(['原包行号', '报文', '当前遭遇', '原遭遇号', '环号', '录入时刻', '标准时刻'],
+      row.reports.map(report => [report.position, report.report, report.event,
+        report.original_event && report.original_event !== report.event ? report.original_event : '—',
+        report.band, report.recorded_at, time(report.observed_at)]), '原始报文'));
     openDetail(`采集包 · ${batch}`, details);
   });
   const rows = [...data.batches].reverse().map(row => [row.batch, data.catalog.sources[row.source].label,

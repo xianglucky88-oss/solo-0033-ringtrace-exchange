@@ -8,11 +8,12 @@ import { batches } from './views/batches.mjs';
 import { links } from './views/links.mjs';
 import { provenance } from './views/provenance.mjs';
 import { releases } from './views/releases.mjs';
+import { correctionsView } from './views/corrections.mjs';
 
 const screen = document.getElementById('screen');
 const notice = document.getElementById('notice');
 const refreshButton = document.getElementById('refresh');
-const views = { tracks, encounters, batches, provenance, links, releases };
+const views = { tracks, encounters, batches, provenance, corrections: correctionsView, links, releases };
 const ctx = { refresh, run, change, openEvent };
 let busy = false;
 
@@ -30,7 +31,7 @@ function render() {
 
 function openEvent(event) {
   const row = typeof event === 'string' ? ctx.data.encounters.find(item => item.event === event) : event;
-  if (row) openDetail(`遭遇 · ${row.event}`, showEvidence(row, ctx.data.catalog));
+  if (row) openDetail(`遭遇 · ${row.event}`, showEvidence(row, ctx.data.catalog, ctx));
 }
 
 function announce(message = '', failed = false) {

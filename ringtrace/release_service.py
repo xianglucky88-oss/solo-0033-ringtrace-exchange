@@ -39,10 +39,13 @@ def verify(connection, revision):
     reports = []
     for event in snapshot['encounters']:
         for candidate in event['candidates']:
-            reports.append({key: value for key, value in candidate.items()
-                            if key not in ('root', 'proofs', 'priority', 'valid_band')})
+            item = {key: value for key, value in candidate.items()
+                    if key not in ('root', 'proofs', 'priority', 'valid_band')}
+            item.setdefault('original_event', item['event'])
+            reports.append(item)
     verified_batches = verify_input_batches(snapshot['batches'], reports)
-    rebuilt = assemble(revision, snapshot['catalog'], snapshot['batches'], reports, snapshot['links'])
+    rebuilt = assemble(revision, snapshot['catalog'], snapshot['batches'], reports,
+                       snapshot['links'], snapshot.get('corrections', []))
     recalculated = digest(canonical(rebuilt))
     return {**header(row), 'matches': recalculated == row['sha256'], 'recalculated_sha256': recalculated,
             'verified_batches': verified_batches}
