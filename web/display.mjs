@@ -4,7 +4,15 @@ export const reasons = {
   lower_disagreement: '低优先来源有分歧',
   same_time: '同刻遭遇无法排序',
   held_between: '途经待复核遭遇',
+  explanation_divergence: '可行解释之间结论不一致',
+  held_endpoint: '端点遭遇未在该解释下确认',
+  root_divergence: '环根在不同解释下不一致',
+  not_adjacent: '该解释下不构成相邻遭遇',
 };
+
+export function explanationLabel(code) {
+  return `解释 ${code.replace(/^X/, '')}`;
+}
 
 export function location(catalog, code) {
   return catalog.sites[code] || code;

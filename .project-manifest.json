@@ -43,12 +43,15 @@
     },
     {
       "id": "identity",
-      "name": "时效身份及交接凭据",
-      "responsibilities": "时效身份及交接凭据",
+      "name": "时效身份、交接凭据与互斥组",
+      "responsibilities": "时效身份、交接凭据与互斥组",
       "paths": [
         "ringtrace/lineage.py",
         "ringtrace/band_service.py",
-        "ringtrace/band_repository.py"
+        "ringtrace/band_repository.py",
+        "ringtrace/explanations/engine.py",
+        "ringtrace/explanations/merge.py",
+        "ringtrace/release_legacy/legacy.py"
       ]
     },
     {
@@ -124,6 +127,14 @@
       {
         "id": "effective_identity",
         "description": "半开时窗和单链时序谱系"
+      },
+      {
+        "id": "exclusive_proof_groups",
+        "description": "同一新环的互斥凭据与可行解释枚举"
+      },
+      {
+        "id": "cross_explanation_ruling",
+        "description": "所有可行解释一致才给定论，部分成立移动单列为待核"
       },
       {
         "id": "source_adjudication",
@@ -432,6 +443,29 @@
         "archive",
         "storage",
         "provenance"
+      ]
+    },
+    {
+      "id": "exclusive_groups",
+      "name": "互斥凭据组与解释级裁定",
+      "entry": "POST /api/link-groups",
+      "steps": [
+        "为同一新环登记不同旧环的互斥凭据",
+        "枚举可行解释并核对裁决、有证段与待核移动",
+        "拒绝让旧凭据失去完整解释的登记",
+        "原件核实后逐组正式裁定并封存复算"
+      ],
+      "success": "每张可选凭据均有完整解释，定论在所有解释下一致，裁定只推进一次修订",
+      "failure": "不可行登记整次不入账，未定案前不能封存，过期或不可行裁定无变化",
+      "verification": "python3 -B -m tools.smoke --through exclusive_groups",
+      "module_ids": [
+        "http",
+        "identity",
+        "decision",
+        "movement",
+        "projection",
+        "release",
+        "browser"
       ]
     }
   ]

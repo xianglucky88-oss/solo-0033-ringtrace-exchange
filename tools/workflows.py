@@ -236,4 +236,99 @@ def concurrent_replay(client):
     assert next_page['next_offset'] is None
 
 
-STEPS = (shell, ingest, receipts, link, encounters, routes, coverage, impact, provenance, preview, freeze, compare, export, late_boundaries, concurrent_replay)
+def exclusive_groups(client):
+    state = client.workspace()
+    base_revision = state['revision']
+    client.post('/api/batches', sample('baisha-reports.json'))
+    group = sample('baisha-group.json')
+    registered = client.post('/api/link-groups', group)
+    assert registered['group'] == 'GROUP-RING-NEW1' and len(registered['proofs']) == 2
+    revision = registered['revision']
+
+    pending = client.workspace()
+    assert {card['code'] for card in pending['explanations']} == {'X1', 'X2'}
+    choices = {tuple((choice['group'], choice['proof']) for choice in card['choices'])[0][1]
+               for card in pending['explanations']}
+    assert choices == {'BAISHA-PRF-A', 'BAISHA-PRF-B'}
+    group_card = next(item for item in pending['groups'] if item['group_id'] == 'GROUP-RING-NEW1')
+    assert group_card['state'] == 'pending' and len(group_card['members']) == 2
+
+    # The shared new-band encounter has no final ruling while roots diverge.
+    disputed = event(pending, 'BS-E12')
+    assert disputed['state'] == 'held' and disputed['reason'] == 'explanation_divergence'
+    roots = {view.get('root') for view in disputed['views'] if view['state'] == 'confirmed'}
+    assert roots == {'RING-OLD1', 'RING-OLD2'}
+
+    # Proof ids stay unique; a duplicate is rejected without a revision move.
+    client.reject('/api/link-groups', {**group, 'proofs': [
+        dict(group['proofs'][0]),
+        {'proof': 'BAISHA-PRF-C', 'old_band': 'RING-OLD3',
+         'effective_at': '2026-05-03T00:00:00+08:00'}]}, 409, 'link_overlap')
+    assert client.workspace()['revision'] == revision
+
+    # A registration that leaves any selectable proof without a complete explanation fails.
+    client.reject('/api/link-group-alternatives', {
+        'group': 'GROUP-RING-NEW1', 'proof': 'BAISHA-PRF-D', 'old_band': 'RING-OLD1',
+        'effective_at': '2026-05-03T00:00:00+08:00'}, 409, 'link_overlap')
+    assert client.workspace()['revision'] == revision
+
+    # A valid third alternative extends the group and keeps every option in some explanation.
+    added = client.post('/api/link-group-alternatives', {
+        'group': 'GROUP-RING-NEW1', 'proof': 'BAISHA-PRF-C', 'old_band': 'RING-OLD3',
+        'effective_at': '2026-05-03T00:00:00+08:00'})
+    revision = added['revision']
+    pending = client.workspace()
+    assert len(pending['explanations']) == 3
+    covered = {proof for card in pending['explanations'] for proof in card['proofs']}
+    assert {'BAISHA-PRF-A', 'BAISHA-PRF-B', 'BAISHA-PRF-C'} <= covered
+
+    # Pending moves name one supporting and one failing explanation.
+    moves = pending['pending_moves']
+    assert moves, 'expected pending moves for the disputed new-band encounter'
+    for move in moves:
+        assert move['supporting']['explanation'] != move['failing']['explanation']
+        assert move['failing']['reason']
+    # No certified cross-explanation movement, so no site gains a departure from them.
+    certified = {segment for route in pending['routes'] for segment in route['segments']}
+    assert all(segment['from_event'] != 'BS-E10' or segment['to_event'] != 'BS-E12'
+               for segment in certified)
+
+    # Sealing stays blocked while the group is pending.
+    client.reject('/api/releases', {'revision': revision}, 409, 'groups_pending')
+
+    # Stale or invalid decisions change nothing; the decision then advances exactly once.
+    client.reject('/api/link-decisions',
+                  {'group': 'GROUP-RING-NEW1', 'proof': 'BAISHA-PRF-A', 'revision': base_revision},
+                  409, 'stale_revision')
+    client.reject('/api/link-decisions',
+                  {'group': 'GROUP-RING-NEW1', 'proof': 'NOT-A-MEMBER', 'revision': revision},
+                  409, 'proof_unavailable')
+    decision = client.post('/api/link-decisions',
+                           {'group': 'GROUP-RING-NEW1', 'proof': 'BAISHA-PRF-A', 'revision': revision})
+    final_revision = decision['revision']
+    assert final_revision == revision + 1
+    decided = client.workspace()
+    assert decided['groups'][0]['state'] == 'decided'
+    assert decided['groups'][0]['chosen_proof'] == 'BAISHA-PRF-A'
+    excluded = {link['proof']: link for link in decided['links'] if link['state'] == 'excluded'}
+    assert set(excluded) == {'BAISHA-PRF-B', 'BAISHA-PRF-C'}
+    assert all(link['excluded_note'] for link in excluded.values())
+    # Repeating the decision does not advance the revision again.
+    client.reject('/api/link-decisions',
+                  {'group': 'GROUP-RING-NEW1', 'proof': 'BAISHA-PRF-A', 'revision': final_revision},
+                  409, 'group_decided')
+    assert client.workspace()['revision'] == final_revision
+
+    # After the ruling the encounter gets a single root and sealing becomes possible.
+    settled = event(client.workspace(), 'BS-E12')
+    assert settled['state'] == 'confirmed' and settled['root'] == 'RING-OLD1'
+    release = client.post('/api/releases', {'revision': final_revision})
+    verify = client.read(f"/api/releases/{release['revision']}/verify")
+    assert verify['matches'] and verify['verified_batches'] == 6
+    # Old sealed releases remain downloadable and recomputable.
+    earlier = client.read('/api/releases/4/verify')
+    assert earlier['matches']
+
+
+STEPS = (shell, ingest, receipts, link, encounters, routes, coverage, impact, provenance, preview,
+         freeze, compare, export, late_boundaries, concurrent_replay, exclusive_groups)

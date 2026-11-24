@@ -76,6 +76,10 @@
     {
       "workflow_id": "concurrent_replay",
       "command": "python3 -B -m tools.smoke --through concurrent_replay"
+    },
+    {
+      "workflow_id": "exclusive_groups",
+      "command": "python3 -B -m tools.smoke --through exclusive_groups"
     }
   ]
 }

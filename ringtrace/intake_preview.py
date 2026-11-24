@@ -6,13 +6,14 @@ from .workbench import read_inputs
 
 def predict(connection, payload):
     receipt, records = prepare(connection, payload)
-    revision, catalog, batches, reports, links = read_inputs(connection)
+    revision, catalog, batches, reports, links, groups = read_inputs(connection)
     if receipt['replayed']:
         return {'base_revision': revision, 'receipt': receipt,
                 'diff': {'from_revision': revision, 'to_revision': revision, 'encounters': [], 'segments': []}}
     additions = [dict(record, source=receipt['source'], batch=receipt['batch'], position=index)
                  for index, record in enumerate(records, 1)]
     metadata = {key: value for key, value in receipt.items() if key != 'replayed'}
-    baseline = assemble(revision, catalog, batches, reports, links)
-    proposed = assemble(receipt['revision'], catalog, [*batches, metadata], [*reports, *additions], links)
+    baseline = assemble(revision, catalog, batches, reports, links, groups)
+    proposed = assemble(receipt['revision'], catalog, [*batches, metadata], [*reports, *additions],
+                        links, groups)
     return {'base_revision': revision, 'receipt': receipt, 'diff': compare(baseline, proposed)}

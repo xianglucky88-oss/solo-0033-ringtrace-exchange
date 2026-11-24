@@ -26,13 +26,25 @@ CREATE TABLE IF NOT EXISTS observation (
   UNIQUE (batch, position),
   FOREIGN KEY (batch, source) REFERENCES input_batch (batch, source)
 );
+CREATE TABLE IF NOT EXISTS link_group (
+  group_id TEXT PRIMARY KEY,
+  new_band TEXT NOT NULL UNIQUE,
+  state TEXT NOT NULL CHECK (state IN ('pending', 'decided')),
+  chosen_proof TEXT,
+  revision INTEGER NOT NULL,
+  excluded_note TEXT
+);
 CREATE TABLE IF NOT EXISTS band_link (
   proof TEXT PRIMARY KEY,
-  old_band TEXT NOT NULL UNIQUE,
-  new_band TEXT NOT NULL UNIQUE,
+  old_band TEXT NOT NULL,
+  new_band TEXT NOT NULL,
   effective_at TEXT NOT NULL,
-  revision INTEGER NOT NULL UNIQUE,
-  CHECK (old_band <> new_band)
+  revision INTEGER NOT NULL,
+  group_id TEXT,
+  state TEXT NOT NULL DEFAULT 'active' CHECK (state IN ('active', 'excluded')),
+  excluded_note TEXT,
+  CHECK (old_band <> new_band),
+  FOREIGN KEY (group_id) REFERENCES link_group (group_id)
 );
 CREATE TABLE IF NOT EXISTS release (
   revision INTEGER PRIMARY KEY,

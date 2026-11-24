@@ -3,8 +3,14 @@ def domain_events(snapshot):
 
 
 def all_segments(snapshot):
-    return {(track['root'], segment['from_event'], segment['to_event']): {'root': track['root'], **segment}
-            for track in snapshot['routes'] for segment in track['segments']}
+    segments = {}
+    for track in snapshot['routes']:
+        for segment in track['segments']:
+            segments[(track['root'], segment['from_event'], segment['to_event'])] = {
+                'root': track['root'], **segment}
+    for move in snapshot.get('pending_moves', []):
+        segments[('pending', move['from_event'], move['to_event'])] = move
+    return segments
 
 
 def changes(before, after):

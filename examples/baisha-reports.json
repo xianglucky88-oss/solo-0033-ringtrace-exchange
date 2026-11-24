@@ -1,0 +1,9 @@
+{
+  "batch": "BAISHA-MAY09",
+  "source": "DUNE-DESK",
+  "reports": [
+    {"report": "BS10", "event": "BS-E10", "band": "RING-OLD1", "site": "SAND-ISLET", "kind": "mark", "observed_at": "2026-05-01T08:00:00+08:00"},
+    {"report": "BS11", "event": "BS-E11", "band": "RING-OLD2", "site": "REED-INLET", "kind": "mark", "observed_at": "2026-05-01T09:30:00+08:00"},
+    {"report": "BS12", "event": "BS-E12", "band": "RING-NEW1", "site": "SAND-ISLET", "kind": "recapture", "observed_at": "2026-05-04T07:00:00+08:00"}
+  ]
+}

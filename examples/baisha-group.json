@@ -1,0 +1,7 @@
+{
+  "new_band": "RING-NEW1",
+  "proofs": [
+    {"proof": "BAISHA-PRF-A", "old_band": "RING-OLD1", "effective_at": "2026-05-03T00:00:00+08:00"},
+    {"proof": "BAISHA-PRF-B", "old_band": "RING-OLD2", "effective_at": "2026-05-03T00:00:00+08:00"}
+  ]
+}

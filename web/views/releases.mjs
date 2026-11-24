@@ -20,8 +20,12 @@ export function releases({ data, versions, change, run }) {
     const row = await request('/api/releases', { revision: data.revision });
     return row.replayed ? `修订 ${row.revision} 已封存。` : `已生成封存版本 ${row.revision}。`;
   }), 'primary');
-  freeze.disabled = !data.encounters.length;
+  const pendingGroups = (data.groups || []).filter(group => group.state === 'pending');
+  freeze.disabled = !data.encounters.length || pendingGroups.length > 0;
   header.append(freeze);
+  if (pendingGroups.length) {
+    header.append(node('p', `互斥组 ${pendingGroups.map(group => group.group_id).join('、')} 尚未定案，定案后才能封存。`, 'muted'));
+  }
   screen.append(header);
   if (!versions.length) {
     screen.append(empty('尚无封存版本。'));

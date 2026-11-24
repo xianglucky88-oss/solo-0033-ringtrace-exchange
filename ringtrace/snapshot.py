@@ -1,15 +1,12 @@
-from .coverage import by_site
-from .encounters import adjudicate
-from .lineage import BandIndex
-from .routes import build_routes
+from .explanations.engine import evaluate
+from .explanations.merge import assemble_projection
+from .release_legacy.legacy import assemble_legacy
+
+FORMAT_VERSION = 2
 
 
-FORMAT_VERSION = 1
-
-
-def assemble(revision, catalog, batches, reports, links):
-    events = adjudicate(reports, BandIndex(links), catalog['sources'])
-    tracks = build_routes(events)
-    return {'format': FORMAT_VERSION, 'revision': revision, 'catalog': catalog, 'batches': batches,
-            'links': links, 'encounters': events, 'routes': tracks,
-            'coverage': by_site(catalog['sites'], events, tracks)}
+def assemble(revision, catalog, batches, reports, links, groups=None):
+    if groups is None:
+        return assemble_legacy(revision, catalog, batches, reports, links)
+    _, evaluations = evaluate(links, groups, reports, catalog['sources'])
+    return assemble_projection(revision, catalog, batches, reports, links, groups, evaluations)

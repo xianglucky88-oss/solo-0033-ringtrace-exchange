@@ -17,6 +17,10 @@ def freeze(connection, revision):
         raise DomainError('stale_revision', '工作数据已变化，请刷新后再封存。', 409)
     if not snapshot['encounters']:
         raise DomainError('empty_release', '接收至少一批遭遇报文后才能封存。', 409)
+    pending = [group['group_id'] for group in snapshot['groups'] if group['state'] == 'pending']
+    if pending:
+        raise DomainError('groups_pending',
+                          f'互斥凭据组 {pending[0]} 尚未正式定案，所有组定案后才能封存。', 409)
     previous = records.find(connection, revision)
     if previous:
         return {**header(previous), 'replayed': True}
@@ -40,9 +44,12 @@ def verify(connection, revision):
     for event in snapshot['encounters']:
         for candidate in event['candidates']:
             reports.append({key: value for key, value in candidate.items()
-                            if key not in ('root', 'proofs', 'priority', 'valid_band')})
+                            if key in ('source', 'report', 'batch', 'position', 'event', 'band',
+                                       'site', 'kind', 'observed_at', 'recorded_at')})
     verified_batches = verify_input_batches(snapshot['batches'], reports)
-    rebuilt = assemble(revision, snapshot['catalog'], snapshot['batches'], reports, snapshot['links'])
+    groups = snapshot.get('groups')
+    rebuilt = assemble(revision, snapshot['catalog'], snapshot['batches'], reports,
+                       snapshot['links'], groups)
     recalculated = digest(canonical(rebuilt))
     return {**header(row), 'matches': recalculated == row['sha256'], 'recalculated_sha256': recalculated,
             'verified_batches': verified_batches}

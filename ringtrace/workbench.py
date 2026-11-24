@@ -4,8 +4,15 @@ from .snapshot import assemble
 
 
 def read_inputs(connection):
-    return (current_revision(connection), catalog.describe(), batch_repository.batches(connection),
-            batch_repository.reports(connection), band_repository.links(connection))
+    revision = current_revision(connection)
+    catalog_card = catalog.describe()
+    batches = batch_repository.batches(connection)
+    reports = batch_repository.reports(connection)
+    groups = band_repository.groups(connection)
+    pending = {group['group_id'] for group in groups if group['state'] == 'pending'}
+    links = [{**link, 'group_pending': link.get('group_id') in pending}
+             for link in band_repository.links(connection)]
+    return revision, catalog_card, batches, reports, links, groups
 
 
 def current(connection):

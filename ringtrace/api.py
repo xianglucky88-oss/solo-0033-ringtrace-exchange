@@ -77,7 +77,9 @@ class Application:
         raise DomainError('not_found', '未找到请求入口。', 404)
 
     def write(self, path, environ, start):
-        if path not in {'/api/batches', '/api/batch-previews', '/api/links', '/api/releases'}:
+        if path not in {'/api/batches', '/api/batch-previews', '/api/links',
+                        '/api/link-groups', '/api/link-group-alternatives',
+                        '/api/link-decisions', '/api/releases'}:
             raise DomainError('not_found', '未找到请求入口。', 404)
         data = body(environ)
         if path == '/api/batch-previews':
@@ -89,6 +91,12 @@ class Application:
                 result = batch_service.ingest(connection, data, expected)
             elif path == '/api/links':
                 result = band_service.register(connection, data)
+            elif path == '/api/link-groups':
+                result = band_service.register_group(connection, data)
+            elif path == '/api/link-group-alternatives':
+                result = band_service.add_alternative(connection, data)
+            elif path == '/api/link-decisions':
+                result = band_service.decide(connection, data)
             else:
                 exact_fields(data, 'revision')
                 result = release_service.freeze(connection, revision(data['revision']))
