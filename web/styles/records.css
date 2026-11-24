@@ -1,0 +1,18 @@
+.table-scroll { overflow: auto; }
+table { width: 100%; border-collapse: collapse; text-align: left; background: var(--paper); font-size: .87rem; }
+th, td { padding: .72rem .85rem; border-bottom: 1px solid #ebece3; vertical-align: middle; }
+th { color: var(--muted); font-size: .79rem; white-space: nowrap; background: #f2f4eb; }
+tbody tr:last-child td { border-bottom: 0; }
+.entry { display: flex; gap: .85rem; padding: 1rem; align-items: flex-end; flex-wrap: wrap; }
+.entry label, .inline-label { display: grid; gap: .38rem; color: var(--muted); font-size: .86rem; width: fit-content; max-width: 100%; }
+.entry input { max-width: 100%; }
+.entry input[name='effective_at'] { width: 16rem; }
+.badge { display: inline-block; width: max-content; padding: .23rem .55rem; border-radius: 2rem; background: #e7ebe3; color: var(--ink); font-size: .76rem; font-weight: 680; }
+.badge.good { background: #e1eee0; color: #20503d; }
+.badge.warn { background: #f6e4d6; color: #803a25; }
+.actions, .evidence-state { display: flex; gap: .7rem; align-items: center; flex-wrap: wrap; }
+.evidence-state { margin-bottom: 1rem; }
+.digest { overflow-wrap: anywhere; font-family: ui-monospace, monospace; font-size: .82rem; }
+dialog { width: min(830px, 95vw); max-height: 90vh; padding: 1.3rem; border: 1px solid var(--line); border-radius: .85rem; color: var(--ink); background: var(--paper); }
+dialog::backdrop { background: #142c24a6; }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }

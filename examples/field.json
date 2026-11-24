@@ -1,0 +1,6 @@
+{
+  "batch": "FIELD-APR05", "source": "FIELD-NOTE", "reports": [
+    {"report":"F22", "event":"E30", "band":"RING-A", "site":"SAND-ISLET", "kind":"recapture", "observed_at":"2026-04-03T22:00:00Z"},
+    {"report":"F09", "event":"E10", "band":"RING-A", "site":"REED-INLET", "kind":"mark", "observed_at":"2026-04-03T00:00:00Z"}
+  ]
+}

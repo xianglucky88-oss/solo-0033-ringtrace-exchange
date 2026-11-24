@@ -1,0 +1,438 @@
+{
+  "name": "翎迹 · 环志重捕证据台",
+  "project_shape": "fullstack",
+  "modules": [
+    {
+      "id": "http",
+      "name": "HTTP 路由及本机静态资源",
+      "responsibilities": "HTTP 路由及本机静态资源",
+      "paths": [
+        "ringtrace/api.py",
+        "ringtrace/http_io.py",
+        "ringtrace/static.py"
+      ]
+    },
+    {
+      "id": "storage",
+      "name": "一致读、独占写及修订",
+      "responsibilities": "一致读、独占写及修订",
+      "paths": [
+        "ringtrace/database.py",
+        "ringtrace/schema.sql"
+      ]
+    },
+    {
+      "id": "intake",
+      "name": "接收协议、重试及影响试算",
+      "responsibilities": "接收协议、重试及影响试算",
+      "paths": [
+        "ringtrace/batch_io.py",
+        "ringtrace/batch_service.py",
+        "ringtrace/intake_preview.py"
+      ]
+    },
+    {
+      "id": "archive",
+      "name": "报文持久化与原包归档",
+      "responsibilities": "报文持久化与原包归档",
+      "paths": [
+        "ringtrace/batch_repository.py",
+        "ringtrace/batch_archive.py",
+        "ringtrace/codec.py"
+      ]
+    },
+    {
+      "id": "identity",
+      "name": "时效身份及交接凭据",
+      "responsibilities": "时效身份及交接凭据",
+      "paths": [
+        "ringtrace/lineage.py",
+        "ringtrace/band_service.py",
+        "ringtrace/band_repository.py"
+      ]
+    },
+    {
+      "id": "decision",
+      "name": "目录、报文时刻与遭遇裁决",
+      "responsibilities": "目录、报文时刻与遭遇裁决",
+      "paths": [
+        "ringtrace/catalog.py",
+        "ringtrace/observations.py",
+        "ringtrace/encounters.py"
+      ]
+    },
+    {
+      "id": "movement",
+      "name": "移动段及样地覆盖",
+      "responsibilities": "移动段及样地覆盖",
+      "paths": [
+        "ringtrace/routes.py",
+        "ringtrace/coverage.py"
+      ]
+    },
+    {
+      "id": "projection",
+      "name": "跨源工作台与派生差分",
+      "responsibilities": "跨源工作台与派生差分",
+      "paths": [
+        "ringtrace/workbench.py",
+        "ringtrace/snapshot.py",
+        "ringtrace/delta.py",
+        "ringtrace/impact.py"
+      ]
+    },
+    {
+      "id": "provenance",
+      "name": "报文筛选与分页",
+      "responsibilities": "报文筛选与分页",
+      "paths": [
+        "ringtrace/provenance.py",
+        "ringtrace/search_query.py"
+      ]
+    },
+    {
+      "id": "release",
+      "name": "封存、对账与导出",
+      "responsibilities": "封存、对账与导出",
+      "paths": [
+        "ringtrace/release_service.py",
+        "ringtrace/release_repository.py",
+        "ringtrace/exports.py"
+      ]
+    },
+    {
+      "id": "browser",
+      "name": "浏览器导航、视图与交互",
+      "responsibilities": "浏览器导航、视图与交互",
+      "paths": [
+        "web/index.html",
+        "web/app.mjs",
+        "web/views"
+      ]
+    }
+  ],
+  "complexity": {
+    "mechanisms": [
+      {
+        "id": "atomic_capture",
+        "description": "一次事务提交采集包、报文和修订"
+      },
+      {
+        "id": "canonical_archive",
+        "description": "按原行序确定性重建并校验摘要"
+      },
+      {
+        "id": "effective_identity",
+        "description": "半开时窗和单链时序谱系"
+      },
+      {
+        "id": "source_adjudication",
+        "description": "按最高优先级共识裁决并保留原证据"
+      },
+      {
+        "id": "bounded_adjacency",
+        "description": "同刻歧义及留置区间阻断邻接"
+      },
+      {
+        "id": "coverage_aggregation",
+        "description": "区分一致遭遇和涉争样地的覆盖汇总"
+      },
+      {
+        "id": "optimistic_revision",
+        "description": "试算前置条件及修订绑定分页"
+      },
+      {
+        "id": "deterministic_projection",
+        "description": "同组资料产生同一快照并可对账"
+      },
+      {
+        "id": "immutable_release",
+        "description": "封存快照自带可复算输入和摘要"
+      },
+      {
+        "id": "stable_export",
+        "description": "从选定封存派生可共享证据与 CSV"
+      }
+    ]
+  },
+  "workflows": [
+    {
+      "id": "shell",
+      "name": "打开工作台",
+      "entry": "GET /",
+      "steps": [
+        "打开应用壳",
+        "解析页面声明的资源并请求整个模块集合"
+      ],
+      "success": "样式与模块以正确类型交付",
+      "failure": "缺失静态资源返回 404",
+      "verification": "python3 -B -m tools.smoke --through shell",
+      "module_ids": [
+        "http",
+        "browser",
+        "storage"
+      ]
+    },
+    {
+      "id": "ingest",
+      "name": "原子接收报文",
+      "entry": "POST /api/batches",
+      "steps": [
+        "提交采集包",
+        "用同内容及撞号数据重试",
+        "读取当前修订"
+      ],
+      "success": "精确重放共享原回执且修订推进一次",
+      "failure": "包号冲突、报文冲突和无效行拒绝整包",
+      "verification": "python3 -B -m tools.smoke --through ingest",
+      "module_ids": [
+        "http",
+        "intake",
+        "archive",
+        "storage"
+      ]
+    },
+    {
+      "id": "receipts",
+      "name": "重建规范原包",
+      "entry": "GET /api/batches/{batch}/source.json",
+      "steps": [
+        "读取回执",
+        "取规范原包",
+        "核对原始时区文本、行号和摘要"
+      ],
+      "success": "原包可按摘要独立验证",
+      "failure": "未知包返回 404 且不下载",
+      "verification": "python3 -B -m tools.smoke --through receipts",
+      "module_ids": [
+        "http",
+        "intake",
+        "archive"
+      ]
+    },
+    {
+      "id": "link",
+      "name": "登记换环",
+      "entry": "POST /api/links",
+      "steps": [
+        "登记带时区生效时刻",
+        "尝试交接占用、循环与乱序",
+        "核对修订"
+      ],
+      "success": "单链且生效时刻统一转换为 UTC",
+      "failure": "冲突凭据被拒绝且修订不变",
+      "verification": "python3 -B -m tools.smoke --through link",
+      "module_ids": [
+        "http",
+        "identity",
+        "storage",
+        "projection"
+      ]
+    },
+    {
+      "id": "encounters",
+      "name": "裁决重捕遭遇",
+      "entry": "GET /api/workspace",
+      "steps": [
+        "聚合同引用报文",
+        "以生效时刻识别原环与新环",
+        "核对来源与决定"
+      ],
+      "success": "最高优先级一致时确认并保留低优先级差异",
+      "failure": "无效环号不进入已确认依据",
+      "verification": "python3 -B -m tools.smoke --through encounters",
+      "module_ids": [
+        "decision",
+        "projection",
+        "identity",
+        "archive"
+      ]
+    },
+    {
+      "id": "routes",
+      "name": "构造移动与驻留证据",
+      "entry": "GET /api/workspace",
+      "steps": [
+        "按环根排序确认时刻",
+        "配对相邻遭遇",
+        "检查端点及持续时长"
+      ],
+      "success": "输出跨样地移动及同样地驻留",
+      "failure": "不可越过同刻多遭遇或留置区间",
+      "verification": "python3 -B -m tools.smoke --through routes",
+      "module_ids": [
+        "identity",
+        "decision",
+        "projection",
+        "movement"
+      ]
+    },
+    {
+      "id": "coverage",
+      "name": "汇总样地证据覆盖",
+      "entry": "GET /api/workspace",
+      "steps": [
+        "裁决报文",
+        "合并样地的确认证据与环根",
+        "按移动端点统计离站"
+      ],
+      "success": "样地确认数和离站数可由证据重算",
+      "failure": "驻留及留置不得冒充离站或确认",
+      "verification": "python3 -B -m tools.smoke --through coverage",
+      "module_ids": [
+        "decision",
+        "projection",
+        "movement"
+      ]
+    },
+    {
+      "id": "impact",
+      "name": "核对换环凭据影响",
+      "entry": "GET /api/links/{proof}/impact",
+      "steps": [
+        "读当前修订",
+        "移除一条凭据后重算",
+        "比较遭遇和移动段"
+      ],
+      "success": "只生成差异且当前修订保持不变",
+      "failure": "未知凭据返回 404",
+      "verification": "python3 -B -m tools.smoke --through impact",
+      "module_ids": [
+        "http",
+        "identity",
+        "movement",
+        "projection"
+      ]
+    },
+    {
+      "id": "provenance",
+      "name": "筛选可追溯候选报文",
+      "entry": "GET /api/provenance",
+      "steps": [
+        "按环根、原始环号或时窗读取候选",
+        "读取修订和记录顺序"
+      ],
+      "success": "包含确认与留置中的来源记录",
+      "failure": "无效时间区间与缺修订翻页被拒绝",
+      "verification": "python3 -B -m tools.smoke --through provenance",
+      "module_ids": [
+        "http",
+        "provenance",
+        "projection",
+        "decision"
+      ]
+    },
+    {
+      "id": "preview",
+      "name": "试算后按修订提交",
+      "entry": "POST /api/batch-previews",
+      "steps": [
+        "试算晚到采集包",
+        "变更工作修订",
+        "提交旧试算后重试"
+      ],
+      "success": "试算只读，正确修订的提交与预览差分一致",
+      "failure": "旧修订提交被拒绝且不产生部分结果",
+      "verification": "python3 -B -m tools.smoke --through preview",
+      "module_ids": [
+        "http",
+        "intake",
+        "projection",
+        "storage"
+      ]
+    },
+    {
+      "id": "freeze",
+      "name": "封存并独立复算",
+      "entry": "POST /api/releases",
+      "steps": [
+        "按当前修订封存",
+        "重复查询回执",
+        "用保存输入重建并校验"
+      ],
+      "success": "封存回执可重放，派生结果摘要一致",
+      "failure": "旧修订或空工作台无法创建封存",
+      "verification": "python3 -B -m tools.smoke --through freeze",
+      "module_ids": [
+        "release",
+        "projection",
+        "archive",
+        "storage"
+      ]
+    },
+    {
+      "id": "compare",
+      "name": "对账两个封存版本",
+      "entry": "GET /api/releases/{left}/compare/{right}",
+      "steps": [
+        "封存当前证据",
+        "接收晚到同级冲突并再次封存",
+        "比较两版"
+      ],
+      "success": "指出留置遭遇及删除的移动段，旧版仍可复算",
+      "failure": "未知封存被拒绝且冲突不会生成跨越段",
+      "verification": "python3 -B -m tools.smoke --through compare",
+      "module_ids": [
+        "release",
+        "projection",
+        "decision",
+        "movement"
+      ]
+    },
+    {
+      "id": "export",
+      "name": "导出选定封存证据",
+      "entry": "GET /api/releases/{revision}/routes.csv",
+      "steps": [
+        "下载证据 JSON 和移动段 CSV",
+        "核对摘要与列内起讫证据"
+      ],
+      "success": "文件内容取自选定修订",
+      "failure": "未封存修订无可下载结果",
+      "verification": "python3 -B -m tools.smoke --through export",
+      "module_ids": [
+        "http",
+        "release",
+        "projection",
+        "movement"
+      ]
+    },
+    {
+      "id": "late_boundaries",
+      "name": "处理同刻歧义和触边留置",
+      "entry": "POST /api/batches",
+      "steps": [
+        "引入同刻遭遇及同级冲突",
+        "检查移动断点和旧封存"
+      ],
+      "success": "移动受歧义点、闭区间阻断，旧版可复算",
+      "failure": "不得用较远确认点填补断点",
+      "verification": "python3 -B -m tools.smoke --through late_boundaries",
+      "module_ids": [
+        "intake",
+        "decision",
+        "movement",
+        "release"
+      ]
+    },
+    {
+      "id": "concurrent_replay",
+      "name": "并发重放后分页回读",
+      "entry": "POST /api/batches",
+      "steps": [
+        "同时提交同包",
+        "用首页修订拼接两页来源结果"
+      ],
+      "success": "一次创建一次回放，27 条报文可分页完整回读",
+      "failure": "不得出现两次修订推进、页内重复或丢行",
+      "verification": "python3 -B -m tools.smoke --through concurrent_replay",
+      "module_ids": [
+        "http",
+        "intake",
+        "archive",
+        "storage",
+        "provenance"
+      ]
+    }
+  ]
+}

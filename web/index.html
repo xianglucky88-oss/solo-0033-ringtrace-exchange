@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#13332d">
+  <title>翎迹 · 环志证据台</title>
+  <link rel="stylesheet" href="/assets/styles/base.css">
+  <link rel="stylesheet" href="/assets/styles/shell.css">
+  <link rel="stylesheet" href="/assets/styles/records.css">
+  <link rel="stylesheet" href="/assets/styles/tracks.css">
+  <script type="module" src="/assets/app.mjs"></script>
+</head>
+<body>
+  <a class="skip-link" href="#workspace">跳到工作区</a>
+  <header class="masthead">
+    <div class="frame masthead-row">
+      <a href="#tracks" class="brand"><span class="brand-mark" aria-hidden="true">翎</span><span>翎迹 <small>环志证据台</small></span></a>
+      <div class="masthead-actions"><span id="revision" class="subtle"></span><button id="refresh" type="button">刷新资料</button></div>
+    </div>
+    <nav class="frame tabs" aria-label="工作台">
+      <a href="#tracks">移动证据</a><a href="#encounters">遭遇裁决</a><a href="#batches">报文接收</a><a href="#provenance">报文追溯</a><a href="#links">换环凭据</a><a href="#releases">封存对账</a>
+    </nav>
+  </header>
+  <main class="frame" id="workspace">
+    <p id="notice" role="status" aria-live="polite"></p>
+    <div id="screen"><p>正在读取工作资料…</p></div>
+  </main>
+  <dialog id="details" aria-labelledby="detail-title">
+    <div class="dialog-head"><h2 id="detail-title"></h2><form method="dialog"><button>关闭</button></form></div>
+    <div id="detail-body"></div>
+  </dialog>
+</body>
+</html>

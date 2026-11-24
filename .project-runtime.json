@@ -1,0 +1,81 @@
+{
+  "project_shape": "fullstack",
+  "language": "Python",
+  "frontend": "HTML / CSS / ES modules",
+  "prerequisites": [
+    "Python >= 3.11",
+    "Node.js >= 18（仅构建检查）"
+  ],
+  "run_command": "python3 -B -m ringtrace --demo",
+  "build_command": "python3 -B -m tools.build",
+  "testing": "deferred",
+  "source_extensions": [
+    ".py",
+    ".sql",
+    ".html",
+    ".mjs",
+    ".css"
+  ],
+  "workflow_checks": [
+    {
+      "workflow_id": "shell",
+      "command": "python3 -B -m tools.smoke --through shell"
+    },
+    {
+      "workflow_id": "ingest",
+      "command": "python3 -B -m tools.smoke --through ingest"
+    },
+    {
+      "workflow_id": "receipts",
+      "command": "python3 -B -m tools.smoke --through receipts"
+    },
+    {
+      "workflow_id": "link",
+      "command": "python3 -B -m tools.smoke --through link"
+    },
+    {
+      "workflow_id": "encounters",
+      "command": "python3 -B -m tools.smoke --through encounters"
+    },
+    {
+      "workflow_id": "routes",
+      "command": "python3 -B -m tools.smoke --through routes"
+    },
+    {
+      "workflow_id": "coverage",
+      "command": "python3 -B -m tools.smoke --through coverage"
+    },
+    {
+      "workflow_id": "impact",
+      "command": "python3 -B -m tools.smoke --through impact"
+    },
+    {
+      "workflow_id": "provenance",
+      "command": "python3 -B -m tools.smoke --through provenance"
+    },
+    {
+      "workflow_id": "preview",
+      "command": "python3 -B -m tools.smoke --through preview"
+    },
+    {
+      "workflow_id": "freeze",
+      "command": "python3 -B -m tools.smoke --through freeze"
+    },
+    {
+      "workflow_id": "compare",
+      "command": "python3 -B -m tools.smoke --through compare"
+    },
+    {
+      "workflow_id": "export",
+      "command": "python3 -B -m tools.smoke --through export"
+    },
+    {
+      "workflow_id": "late_boundaries",
+      "command": "python3 -B -m tools.smoke --through late_boundaries"
+    },
+    {
+      "workflow_id": "concurrent_replay",
+      "command": "python3 -B -m tools.smoke --through concurrent_replay"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "batch": "DUNE-APR03", "source": "DUNE-DESK", "reports": [
+    {"report":"D50", "event":"E50", "band":"RING-B", "site":"STONE-SHOAL", "kind":"recapture", "observed_at":"2026-04-06T09:30:00+08:00"},
+    {"report":"D10", "event":"E10", "band":"RING-A", "site":"REED-INLET", "kind":"mark", "observed_at":"2026-04-03T08:00:00+08:00"},
+    {"report":"D20", "event":"E20", "band":"RING-A", "site":"SAND-ISLET", "kind":"recapture", "observed_at":"2026-04-03T21:00:00Z"},
+    {"report":"D30", "event":"E30", "band":"RING-B", "site":"SAND-ISLET", "kind":"recapture", "observed_at":"2026-04-04T06:00:00+08:00"},
+    {"report":"D40", "event":"E40", "band":"RING-B", "site":"SALT-FLAT", "kind":"recapture", "observed_at":"2026-04-05T09:00:00+08:00"},
+    {"report":"D11", "event":"F10", "band":"RING-C", "site":"SALT-FLAT", "kind":"mark", "observed_at":"2026-04-04T09:00:00+08:00"}
+  ]
+}
