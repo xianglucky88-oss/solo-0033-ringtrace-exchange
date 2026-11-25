@@ -31,6 +31,15 @@ def utc_time(value):
     return dt.isoformat(timespec='seconds').replace('+00:00', 'Z')
 
 
+def observation_window(start_text, end_text):
+    """Parse the two timezone-aware ends of a closed observation range in whole seconds."""
+    start_utc = utc_time(start_text)
+    end_utc = utc_time(end_text)
+    if start_utc > end_utc:
+        raise DomainError('inverted_range', '观测区间起点不得晚于终点。')
+    return start_utc, end_utc
+
+
 def revision(value):
     if type(value) is not int or not 0 <= value <= 2**63 - 1:
         raise DomainError('invalid_revision', '修订号须为非负整数。')

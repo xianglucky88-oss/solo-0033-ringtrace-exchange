@@ -1,4 +1,10 @@
+from datetime import datetime, timedelta
+
 from .errors import DomainError
+
+
+def _previous_second(moment):
+    return (datetime.fromisoformat(moment) - timedelta(seconds=1)).isoformat(timespec='seconds').replace('+00:00', 'Z')
 
 
 class BandIndex:
@@ -31,3 +37,20 @@ class BandIndex:
         valid = not ((before and moment < before['effective_at']) or (after and moment >= after['effective_at']))
         proofs = [link['proof'] for link in (before, after) if link]
         return self.roots.get(band, band), valid, proofs
+
+    def lifetime(self, band):
+        """Return the root band and the half-open [start, finish) lifetime window in UTC."""
+        before, after = self.incoming.get(band), self.outgoing.get(band)
+        start = before['effective_at'] if before else None
+        finish = after['effective_at'] if after else None
+        return self.roots.get(band, band), start, finish
+
+    def valid_window(self, band, lower, upper):
+        """Intersect the closed integer-second observation range with the band's half-open lifetime."""
+        root, start, finish = self.lifetime(band)
+        valid_lower, valid_upper = lower, upper
+        if start is not None and valid_lower < start:
+            valid_lower = start
+        if finish is not None and valid_upper >= finish:
+            valid_upper = _previous_second(finish)
+        return root, valid_lower, valid_upper

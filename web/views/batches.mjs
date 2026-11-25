@@ -1,7 +1,7 @@
 import { request } from '../client.mjs';
 import { openDetail } from '../dialog.mjs';
 import { button, empty, heading, node } from '../dom.mjs';
-import { time } from '../display.mjs';
+import { timeRange } from '../display.mjs';
 import { previewIntake } from '../intake.mjs';
 import { submit } from '../forms.mjs';
 import { table } from '../table.mjs';
@@ -9,7 +9,7 @@ import { table } from '../table.mjs';
 export function batches(ctx) {
   const { data, run } = ctx;
   const screen = node('div', null, 'stack');
-  screen.append(heading('报文接收', '接收带有来源编号与遭遇引用的 UTF-8 JSON 采集包。每包最多 500 条报文。'));
+  screen.append(heading('报文接收', '接收带来源与遭遇引用的 UTF-8 JSON 采集包。报文可给单秒 observed_at，或给两端带时区的闭合区间 observed_start / observed_end。每包最多 500 条。'));
   const form = node('form', null, 'paper entry');
   const label = node('label', '采集包文件');
   const input = node('input');
@@ -25,8 +25,13 @@ export function batches(ctx) {
     const details = node('div', null, 'stack');
     const archive = node('a', '下载原包 JSON');
     archive.href = `/api/batches/${batch}/source.json`;
-    details.append(node('p', `摘要 ${row.sha256}`, 'digest'), archive, table(['原包行号', '报文', '遭遇引用', '环号', '录入时刻', '标准时刻'],
-      row.reports.map(report => [report.position, report.report, report.event, report.band, report.recorded_at, time(report.observed_at)]), '原始报文'));
+    details.append(node('p', `摘要 ${row.sha256}`, 'digest'), archive,
+      table(['原包行号', '报文', '遭遇引用', '环号', '原始时间拼写', '标准 UTC 秒'],
+        row.reports.map(report => [
+          report.position, report.report, report.event, report.band,
+          report.recorded_end ? `${report.recorded_at} → ${report.recorded_end}` : report.recorded_at,
+          timeRange(report.observed_at, report.observed_end),
+        ]), '原始报文'));
     openDetail(`采集包 · ${batch}`, details);
   });
   const rows = [...data.batches].reverse().map(row => [row.batch, data.catalog.sources[row.source].label,

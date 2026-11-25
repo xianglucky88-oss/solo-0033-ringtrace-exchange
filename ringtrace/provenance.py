@@ -10,8 +10,12 @@ def matches(row, query):
     exact = [('reference', 'event'), ('source', 'source'), ('band', band_key)]
     if any(name in query and row[key] != query[name] for name, key in exact):
         return False
-    time = row['observed_at']
-    return ('from' not in query or query['from'] <= time) and ('until' not in query or time < query['until'])
+    upper = row['observed_end'] or row['observed_at']
+    if 'from' in query and upper < query['from']:
+        return False
+    if 'until' in query and row['observed_at'] >= query['until']:
+        return False
+    return True
 
 
 def search(connection, query):

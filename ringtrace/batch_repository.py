@@ -19,8 +19,8 @@ def insert_batch(connection, receipt, records):
     connection.execute('''INSERT INTO input_batch (batch, source, sha256, count, revision)
                           VALUES (:batch, :source, :sha256, :count, :revision)''', receipt)
     connection.executemany('''INSERT INTO observation
-      (source, report, batch, position, event, band, site, kind, observed_at, recorded_at)
-      VALUES (:source, :report, :batch, :position, :event, :band, :site, :kind, :observed_at, :recorded_at)''',
+      (source, report, batch, position, event, band, site, kind, observed_at, observed_end, recorded_at, recorded_end)
+      VALUES (:source, :report, :batch, :position, :event, :band, :site, :kind, :observed_at, :observed_end, :recorded_at, :recorded_end)''',
       ({**record, 'source': receipt['source'], 'batch': receipt['batch'], 'position': position}
        for position, record in enumerate(records, 1)))
 

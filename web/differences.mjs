@@ -1,16 +1,19 @@
 import { empty, node } from './dom.mjs';
-import { location, reasons, time } from './display.mjs';
+import { location, reasons, timeRange } from './display.mjs';
 import { table } from './table.mjs';
 
 function eventLabel(event, catalog) {
   if (!event) return '—';
-  const decision = event.state === 'held' ? '待复核' : `${event.root} · ${location(catalog, event.site)} · ${time(event.observed_at)}`;
+  const when = event.feasible_from
+    ? timeRange(event.feasible_from, event.feasible_until)
+    : timeRange(event.observed_at);
+  const decision = event.state === 'held' ? '待复核' : `${event.root} · ${location(catalog, event.site)} · ${when}`;
   const reason = event.reason ? ` · ${reasons[event.reason]}` : '';
   const evidence = node('ul');
   for (const row of event.candidates) {
     const proofs = row.proofs.length ? ` · 凭据 ${row.proofs.join('、')}` : '';
     const identity = `${row.band} ${row.valid_band ? '有效' : '失效'} · 环根 ${row.root}`;
-    const observation = `${location(catalog, row.site)} · ${time(row.observed_at)}`;
+    const observation = `${location(catalog, row.site)} · ${timeRange(row.observed_at, row.observed_end)}`;
     evidence.append(node('li', `${row.source} / ${row.report} · ${identity} · ${observation}${proofs}`));
   }
   const label = node('div');
@@ -20,7 +23,10 @@ function eventLabel(event, catalog) {
 
 function segmentLabel(segment, catalog) {
   if (!segment) return '—';
-  return `${location(catalog, segment.from_site)} → ${location(catalog, segment.to_site)} · ${time(segment.start)} → ${time(segment.end)}`;
+  const span = 'start_until' in segment
+    ? `${timeRange(segment.start, segment.start_until)} → ${timeRange(segment.end, segment.end_until)}`
+    : `${timeRange(segment.start)} → ${timeRange(segment.end)}`;
+  return `${location(catalog, segment.from_site)} → ${location(catalog, segment.to_site)} · ${span}`;
 }
 
 export function differences(diff, catalog) {

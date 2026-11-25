@@ -36,11 +36,11 @@ def read(connection, revision):
 def verify(connection, revision):
     row = read(connection, revision)
     snapshot = decode(row['payload'])
+    drop_keys = ('root', 'proofs', 'priority', 'valid_band', 'valid_from', 'valid_until')
     reports = []
     for event in snapshot['encounters']:
         for candidate in event['candidates']:
-            reports.append({key: value for key, value in candidate.items()
-                            if key not in ('root', 'proofs', 'priority', 'valid_band')})
+            reports.append({key: value for key, value in candidate.items() if key not in drop_keys})
     verified_batches = verify_input_batches(snapshot['batches'], reports)
     rebuilt = assemble(revision, snapshot['catalog'], snapshot['batches'], reports, snapshot['links'])
     recalculated = digest(canonical(rebuilt))

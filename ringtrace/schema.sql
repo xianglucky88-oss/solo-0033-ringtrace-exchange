@@ -21,7 +21,9 @@ CREATE TABLE IF NOT EXISTS observation (
   site TEXT NOT NULL,
   kind TEXT NOT NULL,
   observed_at TEXT NOT NULL,
+  observed_end TEXT,
   recorded_at TEXT NOT NULL,
+  recorded_end TEXT,
   PRIMARY KEY (source, report),
   UNIQUE (batch, position),
   FOREIGN KEY (batch, source) REFERENCES input_batch (batch, source)

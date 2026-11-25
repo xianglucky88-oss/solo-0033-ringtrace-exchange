@@ -1,6 +1,6 @@
 import { request } from '../client.mjs';
 import { badge, button, empty, heading, node, select } from '../dom.mjs';
-import { location, time } from '../display.mjs';
+import { location, timeRange } from '../display.mjs';
 import { field, submit } from '../forms.mjs';
 import { table } from '../table.mjs';
 
@@ -23,9 +23,9 @@ function filters(catalog) {
 
 function results(page, catalog) {
   if (!page.items.length) return empty('没有符合条件的原始报文。');
-  return table(['来源报文', '原包 / 行号', '遭遇', '报文环号 → 当前环根', '标准时刻', '样地', '裁决'], page.items.map(row => [
+  return table(['来源报文', '原包 / 行号', '遭遇', '报文环号 → 当前环根', '标准 UTC 秒', '样地', '裁决'], page.items.map(row => [
     `${catalog.sources[row.source].label} · ${row.report}`, `${row.batch} / ${row.position}`, row.event,
-    `${row.band} → ${row.root}`, time(row.observed_at), location(catalog, row.site),
+    `${row.band} → ${row.root}`, timeRange(row.observed_at, row.observed_end), location(catalog, row.site),
     badge(row.decision === 'confirmed' ? '已确认' : '待复核', row.decision === 'confirmed' ? 'good' : 'warn'),
   ]), '报文追溯结果');
 }

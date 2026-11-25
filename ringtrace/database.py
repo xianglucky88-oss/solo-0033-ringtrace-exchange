@@ -23,6 +23,15 @@ class Database:
             connection.execute('PRAGMA journal_mode = WAL')
             schema = Path(__file__).with_name('schema.sql').read_text(encoding='utf-8')
             connection.executescript(f'BEGIN IMMEDIATE;\n{schema}\nCOMMIT;')
+            self._migrate_observation_ranges(connection)
+
+    def _migrate_observation_ranges(self, connection):
+        columns = {row['name'] for row in connection.execute('PRAGMA table_info(observation)')}
+        if 'observed_end' not in columns:
+            connection.execute('BEGIN IMMEDIATE')
+            connection.execute('ALTER TABLE observation ADD COLUMN observed_end TEXT')
+            connection.execute('ALTER TABLE observation ADD COLUMN recorded_end TEXT')
+            connection.commit()
 
     @contextmanager
     def transaction(self, *, write=False):

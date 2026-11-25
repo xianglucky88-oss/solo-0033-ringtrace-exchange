@@ -236,4 +236,108 @@ def concurrent_replay(client):
     assert next_page['next_offset'] is None
 
 
-STEPS = (shell, ingest, receipts, link, encounters, routes, coverage, impact, provenance, preview, freeze, compare, export, late_boundaries, concurrent_replay)
+def range_intake(client):
+    payload = sample('sandbar-range.json')
+    receipt = client.post('/api/batches', payload)
+    assert receipt['count'] == 2 and not receipt['replayed']
+    batch = client.read('/api/batches/DUNE-E30-RANGE')
+    row = next(item for item in batch['reports'] if item['report'] == 'DR30')
+    assert row['recorded_at'].endswith('+08:00') and row['recorded_end'].endswith('+08:00')
+    assert (row['observed_at'], row['observed_end']) == ('2026-04-03T21:59:50Z', '2026-04-03T22:00:10Z')
+    raw = client.call('/api/batches/DUNE-E30-RANGE/source.json').body
+    assert raw == canonical(payload) and digest(raw) == receipt['sha256']
+    malformed = {'batch': 'BAD-RANGE', 'source': 'DUNE-DESK', 'reports': [
+        {'report': 'X1', 'event': 'EX', 'band': 'RING-B', 'site': 'SAND-ISLET', 'kind': 'recapture',
+         'observed_start': '2026-04-04T08:00:00Z', 'observed_end': '2026-04-04T07:00:00Z'}]}
+    client.reject('/api/batches', malformed, 400, 'inverted_range')
+    half = {'batch': 'BAD-HALF', 'source': 'DUNE-DESK', 'reports': [
+        {'report': 'X2', 'event': 'EX', 'band': 'RING-B', 'site': 'SAND-ISLET', 'kind': 'recapture',
+         'observed_start': '2026-04-04T08:00:00Z'}]}
+    client.reject('/api/batches', half, 400, 'invalid_fields')
+
+
+def range_encounters(client):
+    state = client.workspace()
+    assert state['format'] == 2
+    e30 = event(state, 'E30')
+    # The existing single-second reports pin 22:00:00; the range report can only confirm the same
+    # common second, so the intersection stays a single feasible second while all reports remain.
+    assert e30['state'] == 'confirmed'
+    assert e30['feasible_from'] == e30['feasible_until'] == '2026-04-03T22:00:00Z'
+    ranged = next(row for row in e30['candidates'] if row['report'] == 'DR30')
+    assert (ranged['valid_from'], ranged['valid_until']) == ('2026-04-03T22:00:00Z', '2026-04-03T22:00:10Z')
+    instant = next(row for row in e30['candidates'] if row['report'] == 'D30')
+    assert (instant['valid_from'], instant['valid_until']) == ('2026-04-03T22:00:00Z', '2026-04-03T22:00:00Z')
+    # Old band before the switch and new band after it share no valid second: the event is held.
+    split = {'batch': 'SPLIT', 'source': 'MUD-DESK', 'reports': [
+        {'report': 'S1', 'event': 'E70', 'band': 'RING-A', 'site': 'SAND-ISLET', 'kind': 'recapture',
+         'observed_start': '2026-04-03T21:59:40Z', 'observed_end': '2026-04-03T21:59:59Z'},
+        {'report': 'S2', 'event': 'E70', 'band': 'RING-B', 'site': 'SAND-ISLET', 'kind': 'recapture',
+         'observed_start': '2026-04-03T22:00:00Z', 'observed_end': '2026-04-03T22:00:20Z'}]}
+    client.post('/api/batches', split)
+    state = client.workspace()
+    e70 = event(state, 'E70')
+    assert e70['state'] == 'held' and e70['reason'] == 'no_common_second'
+    assert (e70['blocked_from'], e70['blocked_until']) == ('2026-04-03T21:59:40Z', '2026-04-03T22:00:20Z')
+    # A lower-priority range report keeps its source without narrowing the feasible seconds.
+    narrow = {'batch': 'NARROW', 'source': 'FIELD-NOTE', 'reports': [
+        {'report': 'N1', 'event': 'E32', 'band': 'RING-B', 'site': 'SAND-ISLET', 'kind': 'recapture',
+         'observed_start': '2026-04-03T23:00:05Z', 'observed_end': '2026-04-03T23:00:08Z'}]}
+    client.post('/api/batches', narrow)
+    e32 = event(client.workspace(), 'E32')
+    assert e32['state'] == 'confirmed'
+    assert (e32['feasible_from'], e32['feasible_until']) == ('2026-04-03T23:00:00Z', '2026-04-03T23:00:30Z')
+    assert len(e32['candidates']) == 2
+
+
+def range_routes(client):
+    state = client.workspace()
+    root = track(state)
+    # The E70 blocking window [21:59:40, 22:00:20] touches both spans around the ring change,
+    # so neither E20→E30 nor E30→E32 can stand as provable movements.
+    pairs = {(row['from_event'], row['to_event']) for row in root['segments']}
+    assert ('E20', 'E30') not in pairs and ('E30', 'E32') not in pairs
+    assert any('E70' in gap['events'] and gap['reason'] == 'held_between' for gap in root['gaps'])
+    # A clean same-site pair on an untouched root demonstrates feasible bounds and a stay.
+    clean = {'batch': 'CLEAN', 'source': 'DUNE-DESK', 'reports': [
+        {'report': 'C1', 'event': 'E80', 'band': 'RING-K', 'site': 'SAND-ISLET', 'kind': 'mark',
+         'observed_start': '2026-04-05T00:00:00Z', 'observed_end': '2026-04-05T00:00:10Z'},
+        {'report': 'C2', 'event': 'E81', 'band': 'RING-K', 'site': 'SAND-ISLET', 'kind': 'recapture',
+         'observed_start': '2026-04-05T01:00:00Z', 'observed_end': '2026-04-05T01:00:20Z'}]}
+    client.post('/api/batches', clean)
+    clean_track = next(item for item in client.workspace()['routes'] if item['root'] == 'RING-K')
+    stay = next(row for row in clean_track['segments'] if (row['from_event'], row['to_event']) == ('E80', 'E81'))
+    assert stay['kind'] == 'stay'
+    assert (stay['start'], stay['start_until'], stay['end'], stay['end_until']) == (
+        '2026-04-05T00:00:00Z', '2026-04-05T00:00:10Z', '2026-04-05T01:00:00Z', '2026-04-05T01:00:20Z')
+    assert (stay['min_elapsed_seconds'], stay['max_elapsed_seconds']) == (3590, 3620)
+    # A third confirmed encounter that can share a span leaves an explicit break point.
+    third = {'batch': 'THIRD', 'source': 'DUNE-DESK', 'reports': [
+        {'report': 'T1', 'event': 'E82', 'band': 'RING-K', 'site': 'SALT-FLAT', 'kind': 'recapture',
+         'observed_start': '2026-04-05T00:30:00Z', 'observed_end': '2026-04-05T00:30:05Z'}]}
+    client.post('/api/batches', third)
+    clean_track = next(item for item in client.workspace()['routes'] if item['root'] == 'RING-K')
+    assert any(gap['reason'] == 'intervening_event' and 'E82' in gap['events'] for gap in clean_track['gaps'])
+    assert not any((row['from_event'], row['to_event']) == ('E80', 'E81') for row in clean_track['segments'])
+
+
+def range_release(client):
+    state = client.workspace()
+    revision = state['revision']
+    client.post('/api/releases', {'revision': revision})
+    check = client.read(f'/api/releases/{revision}/verify')
+    assert check['matches'] and check['recalculated_sha256']
+    evidence = client.call(f'/api/releases/{revision}/evidence.json')
+    assert digest(evidence.body) == check['sha256'] and evidence.json()['format'] == 2
+    exported = client.call(f'/api/releases/{revision}/routes.csv').body.decode('utf-8-sig').splitlines()
+    assert exported[0].startswith('环根,起点引用,终点引用,起点样地,终点样地,起点最早 UTC')
+    # Legacy releases with only definite instants still recompute and export the old columns.
+    legacy = client.read('/api/releases/3/verify')
+    assert legacy['matches']
+    legacy_csv = client.call('/api/releases/3/routes.csv').body.decode('utf-8-sig').splitlines()
+    assert legacy_csv[0] == '环根,起点引用,终点引用,起点样地,终点样地,起点 UTC,终点 UTC,秒数,类型'
+
+
+STEPS = (shell, ingest, receipts, link, encounters, routes, coverage, impact, provenance, preview, freeze,
+         compare, export, late_boundaries, concurrent_replay, range_intake, range_encounters,
+         range_routes, range_release)

@@ -9,7 +9,11 @@ def reconstruct(batch, reports):
     rows = []
     for row in sorted(reports, key=lambda row: row['position']):
         original = {field: row[field] for field in fields}
-        original['observed_at'] = row['recorded_at']
+        if row.get('observed_end') is None:
+            original['observed_at'] = row['recorded_at']
+        else:
+            original['observed_start'] = row['recorded_at']
+            original['observed_end'] = row['recorded_end']
         rows.append(original)
     return {'batch': batch['batch'], 'source': batch['source'], 'reports': rows}
 
