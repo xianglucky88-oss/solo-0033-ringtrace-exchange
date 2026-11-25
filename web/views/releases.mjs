@@ -2,6 +2,7 @@ import { request } from '../client.mjs';
 import { openDetail } from '../dialog.mjs';
 import { differences } from '../differences.mjs';
 import { time } from '../display.mjs';
+import { intakeReasons } from '../intake.mjs';
 import { button, empty, heading, node, select } from '../dom.mjs';
 import { submit } from '../forms.mjs';
 import { table } from '../table.mjs';
@@ -43,7 +44,19 @@ export function releases({ data, versions, change, run }) {
   function verify(number) {
     return run(async () => {
       const result = await request(`/api/releases/${number}/verify`);
-      openDetail(`复算修订 ${number}`, node('p', result.matches ? `已核对 ${result.verified_batches} 个采集包。复算摘要与封存摘要一致。` : '复算摘要与封存摘要不一致。'));
+      const detail = node('div', null, 'stack');
+      detail.append(node('p', result.matches
+        ? `已核对 ${result.verified_batches} 个采集包。复算摘要与封存摘要一致，接收分流无异常。`
+        : `复算发现异常：摘要${result.digest_matches ? '一致' : '不一致'}，${result.mismatches.length} 处分流不符。`));
+      if (result.mismatches.length) {
+        detail.append(table(['采集包', '行号', '封存记录', '复算结论', '原因'], result.mismatches.map(row => [
+          row.batch, row.position,
+          row.recorded === 'accepted' ? '已接收' : '已拒收',
+          row.recomputed === 'accepted' ? '应接收' : '应拒收',
+          intakeReasons[row.reason] || row.reason || '—',
+        ]), '复算分流差异'));
+      }
+      openDetail(`复算修订 ${number}`, detail);
     });
   }
   screen.append(table(['修订', '封存时刻', '摘要', '复核与下载'], versions.map(row => {

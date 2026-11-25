@@ -76,6 +76,22 @@
     {
       "workflow_id": "concurrent_replay",
       "command": "python3 -B -m tools.smoke --through concurrent_replay"
+    },
+    {
+      "workflow_id": "partial",
+      "command": "python3 -B -m tools.smoke --through partial"
+    },
+    {
+      "workflow_id": "grouping",
+      "command": "python3 -B -m tools.smoke --through grouping"
+    },
+    {
+      "workflow_id": "stolen",
+      "command": "python3 -B -m tools.smoke --through stolen"
+    },
+    {
+      "workflow_id": "supplement",
+      "command": "python3 -B -m tools.smoke --through supplement"
     }
   ]
 }

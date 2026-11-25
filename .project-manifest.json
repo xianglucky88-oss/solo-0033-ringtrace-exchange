@@ -18,13 +18,14 @@
       "responsibilities": "一致读、独占写及修订",
       "paths": [
         "ringtrace/database.py",
-        "ringtrace/schema.sql"
+        "ringtrace/schema.sql",
+        "ringtrace/legacy.py"
       ]
     },
     {
       "id": "intake",
-      "name": "接收协议、重试及影响试算",
-      "responsibilities": "接收协议、重试及影响试算",
+      "name": "接收协议、分组受理、重试及影响试算",
+      "responsibilities": "接收协议、分组受理、重试及影响试算",
       "paths": [
         "ringtrace/batch_io.py",
         "ringtrace/batch_service.py",
@@ -432,6 +433,81 @@
         "archive",
         "storage",
         "provenance"
+      ]
+    },
+    {
+      "id": "partial",
+      "name": "部分受理采集包",
+      "entry": "POST /api/batches",
+      "steps": [
+        "提交含一行坏数据的采集包",
+        "查看各组结论与拒收行号",
+        "确认只发生一次修订推进"
+      ],
+      "success": "坏行所在组整组拒收，其他组入账，修订推进一次",
+      "failure": "不得因单行失败拒收同包其他合格组",
+      "verification": "python3 -B -m tools.smoke --through partial",
+      "module_ids": [
+        "http",
+        "intake",
+        "archive",
+        "storage"
+      ]
+    },
+    {
+      "id": "grouping",
+      "name": "分组拒收与整包拒收",
+      "entry": "POST /api/batches",
+      "steps": [
+        "制造跨组共用报文号",
+        "提交全部不合格的包",
+        "提交遭遇引用缺失的包"
+      ],
+      "success": "共用号的相关组均拒收；无合格组与缺引用时不写回执、不推进修订",
+      "failure": "不得为无可收组的包生成回执或部分结果",
+      "verification": "python3 -B -m tools.smoke --through grouping",
+      "module_ids": [
+        "http",
+        "intake",
+        "archive",
+        "storage"
+      ]
+    },
+    {
+      "id": "stolen",
+      "name": "号被抢占后重新试算",
+      "entry": "POST /api/batches",
+      "steps": [
+        "试算晚到包",
+        "另包先占同源报文号",
+        "用旧修订提交并重新试算"
+      ],
+      "success": "旧修订被拒，重新试算显示该组因号被占用而拒收，不生成回执",
+      "failure": "不得把旧试算直接套用到新修订或复用已占号",
+      "verification": "python3 -B -m tools.smoke --through stolen",
+      "module_ids": [
+        "http",
+        "intake",
+        "storage"
+      ]
+    },
+    {
+      "id": "supplement",
+      "name": "补收不改变旧包结论",
+      "entry": "POST /api/batches",
+      "steps": [
+        "接收被拆分的包",
+        "拒收组及其报文号留空",
+        "随后补收该号并封存复算"
+      ],
+      "success": "旧包结论不变且复算通过；未入账的号可被新包接收",
+      "failure": "补收不得回溯改写旧包或使复算误判漏收",
+      "verification": "python3 -B -m tools.smoke --through supplement",
+      "module_ids": [
+        "intake",
+        "archive",
+        "release",
+        "storage"
       ]
     }
   ]

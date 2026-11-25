@@ -23,6 +23,26 @@ class Database:
             connection.execute('PRAGMA journal_mode = WAL')
             schema = Path(__file__).with_name('schema.sql').read_text(encoding='utf-8')
             connection.executescript(f'BEGIN IMMEDIATE;\n{schema}\nCOMMIT;')
+            self.migrate(connection)
+
+    def migrate(self, connection):
+        """Bring a database created before line dispositions up to date.
+
+        Packages received by the earlier all-or-nothing intake are replayed
+        as fully accepted packages so they stay downloadable and verifiable.
+        """
+        from .legacy import backfill
+
+        columns = {row['name'] for row in connection.execute('PRAGMA table_info(input_batch)')}
+        if 'line_count' not in columns:
+            connection.execute('BEGIN IMMEDIATE')
+            try:
+                connection.execute('ALTER TABLE input_batch ADD COLUMN line_count INTEGER NOT NULL DEFAULT 0')
+                backfill(connection)
+                connection.commit()
+            except BaseException:
+                connection.rollback()
+                raise
 
     @contextmanager
     def transaction(self, *, write=False):

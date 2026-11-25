@@ -58,19 +58,135 @@ def ingest(client):
     client.reject('/api/releases', {'revision': 0}, 409, 'empty_release')
     payload = sample('dune.json')
     receipt = client.post('/api/batches', payload)
-    assert (receipt['count'], receipt['revision'], receipt['replayed']) == (6, 1, False)
+    assert (receipt['count'], receipt['line_count'], receipt['revision'], receipt['replayed']) == (6, 6, 1, False)
     retried = client.post('/api/batches', payload, expect=200)
     assert retried['sha256'] == receipt['sha256'] and retried['replayed']
     altered = {**payload, 'reports': payload['reports'][1:]}
     client.reject('/api/batches', altered, 409, 'batch_conflict')
     duplicated = {**payload, 'batch': 'CONFLICTING-BATCH'}
     client.reject('/api/batches', duplicated, 409, 'report_conflict')
-    broken = {**sample('field.json'), 'reports': [*sample('field.json')['reports'], {'report': 'BAD'}]}
-    client.reject('/api/batches', broken, 400, 'invalid_fields')
+    missing = {**sample('field.json'), 'reports': [*sample('field.json')['reports'], {'report': 'BAD'}]}
+    refusal = client.post('/api/batches', missing, expect=400)
+    assert refusal['error'] == 'invalid_fields'
+    assert [row['position'] for row in refusal['lines']] == [1, 2, 3]
+    assert refusal['lines'][-1]['reason'] == 'invalid_fields'
     malformed = client.call('/api/batches', raw=b'{"batch":1,"batch":2}', expect=400)
     assert malformed.json()['error'] == 'invalid_json'
     assert client.workspace()['revision'] == 1
     client.post('/api/batches', sample('field.json'))
+    assert client.workspace()['revision'] == 2
+
+
+def partial(client):
+    """A single bad line only rejects its own encounter group."""
+    good = dict(sample('mud-late.json')['reports'][1], report='M-PART-2', event='P-E30')
+    bad = dict(sample('mud-late.json')['reports'][0], report='M-PART-1', event='P-E40', site='NO-SUCH-SITE')
+    payload = {'batch': 'MUD-PARTIAL', 'source': 'MUD-DESK', 'reports': [bad, good]}
+    preview = client.post('/api/batch-previews', payload, expect=200)
+    assert preview['acceptable'] and preview['receipt']['count'] == 1
+    groups = {row['event']: row for row in preview['groups']}
+    assert groups['P-E40']['state'] == 'rejected' and groups['P-E40']['rejected_lines'] == [1]
+    assert groups['P-E30']['state'] == 'accepted'
+    assert [row['key'] for row in preview['diff']['encounters']] == ['P-E30']
+    before = client.workspace()['revision']
+    receipt = client.post('/api/batches', payload)
+    assert (receipt['count'], receipt['line_count'], receipt['revision']) == (1, 2, before + 1)
+    assert [(row['position'], row['disposition'], row['reason']) for row in receipt['lines']] == [
+        (1, 'rejected', 'unknown_site'), (2, 'accepted', None)]
+    assert client.workspace()['revision'] == before + 1
+    detail = client.read('/api/batches/MUD-PARTIAL')
+    assert [row['position'] for row in detail['reports']] == [2]
+    archive = client.call('/api/batches/MUD-PARTIAL/source.json').body
+    assert archive == canonical(payload) and decode(archive)['reports'][0]['site'] == 'NO-SUCH-SITE'
+    assert digest(archive) == detail['sha256']
+
+
+def grouping(client):
+    """Whole-package refusals, cross-group numbers and empty outcomes."""
+    before = client.workspace()['revision']
+    cross = {'batch': 'CROSS-NUMBERS', 'source': 'DUNE-DESK', 'reports': [
+        {'report': 'X1', 'event': 'Q1', 'band': 'RING-A', 'site': 'SALT-FLAT', 'kind': 'mark',
+         'observed_at': '2026-05-10T00:00:00Z'},
+        {'report': 'X1', 'event': 'Q2', 'band': 'RING-A', 'site': 'SALT-FLAT', 'kind': 'mark',
+         'observed_at': '2026-05-10T01:00:00Z'},
+        {'report': 'X2', 'event': 'Q3', 'band': 'RING-A', 'site': 'SALT-FLAT', 'kind': 'mark',
+         'observed_at': '2026-05-10T02:00:00Z'},
+    ]}
+    preview = client.post('/api/batch-previews', cross, expect=200)
+    assert [(row['event'], row['reason']) for row in preview['groups']] == [
+        ('Q1', 'cross_group_report'), ('Q2', 'cross_group_report'), ('Q3', None)]
+    receipt = client.post('/api/batches', cross)
+    assert receipt['count'] == 1 and receipt['revision'] == before + 1
+    rejected = {row['position'] for row in receipt['lines'] if row['disposition'] == 'rejected'}
+    assert rejected == {1, 2}
+
+    all_bad = {'batch': 'ALL-BAD', 'source': 'MUD-DESK', 'reports': [
+        {'report': 'Y1', 'event': 'Q4', 'band': 'RING-A', 'site': 'NO-SITE', 'kind': 'mark',
+         'observed_at': '2026-05-11T00:00:00Z'},
+        {'report': 'Y2', 'event': 'Q5', 'band': 'RING-A', 'site': 'NO-SITE', 'kind': 'mark',
+         'observed_at': '2026-05-11T01:00:00Z'},
+    ]}
+    empty = client.post('/api/batch-previews', all_bad, expect=200)
+    assert not empty['acceptable'] and empty['receipt'] is None and not empty['diff']['encounters']
+    refused = client.post('/api/batches', all_bad, expect=400)
+    assert [row['reason'] for row in refused['lines']] == ['unknown_site', 'unknown_site']
+    client.call('/api/batches/ALL-BAD', expect=404)
+
+    no_reference = {'batch': 'NO-REFERENCE', 'source': 'MUD-DESK', 'reports': [
+        {'report': 'Z1', 'event': 'Q6', 'band': 'RING-A', 'site': 'SALT-FLAT', 'kind': 'mark',
+         'observed_at': '2026-05-12T00:00:00Z'},
+        {'report': 'Z2', 'band': 'RING-A', 'site': 'SALT-FLAT', 'kind': 'mark',
+         'observed_at': '2026-05-12T01:00:00Z'},
+    ]}
+    client.reject('/api/batches', no_reference, 400, 'invalid_fields')
+    client.call('/api/batches/NO-REFERENCE', expect=404)
+    assert client.workspace()['revision'] == before + 1
+
+
+def report(identifier, reference, at='2026-07-01T00:00:00Z'):
+    return {'report': identifier, 'event': reference, 'band': 'RING-A', 'site': 'SALT-FLAT',
+            'kind': 'mark', 'observed_at': at}
+
+
+def stolen(client):
+    """A number claimed by a rival package forces a fresh preview, not reuse."""
+    first = client.post('/api/batch-previews', {'batch': 'SLOW', 'source': 'MUD-DESK',
+                                                'reports': [report('S1', 'SG')]}, expect=200)
+    assert first['acceptable'] and client.workspace()['revision'] == first['base_revision']
+    client.post('/api/batches', {'batch': 'FAST', 'source': 'MUD-DESK',
+                                 'reports': [report('S1', 'FG', '2026-08-02T00:00:00Z')]})
+    client.reject('/api/batches', {'batch': 'SLOW', 'source': 'MUD-DESK', 'reports': [report('S1', 'SG')]},
+                  409, 'stale_revision', headers={'If-Match': f'"{first["base_revision"]}"'})
+    again = client.post('/api/batch-previews', {'batch': 'SLOW', 'source': 'MUD-DESK',
+                                                'reports': [report('S1', 'SG')]}, expect=200)
+    assert not again['acceptable'] and again['receipt'] is None
+    assert [(row['event'], row['reason']) for row in again['groups']] == [('SG', 'report_conflict')]
+    client.reject('/api/batches', {'batch': 'SLOW', 'source': 'MUD-DESK', 'reports': [report('S1', 'SG')]},
+                  409, 'report_conflict')
+    client.call('/api/batches/SLOW', expect=404)
+
+
+def supplement(client):
+    """A later package cannot change an earlier package's conclusion."""
+    client.post('/api/batches', {'batch': 'BASE-BATCH', 'source': 'MUD-DESK',
+                                 'reports': [report('R1', 'RG1')]})
+    received = client.post('/api/batches', {'batch': 'SPLIT-BATCH', 'source': 'MUD-DESK', 'reports': [
+        report('R1', 'RG2', '2026-07-02T00:00:00Z'), report('R2', 'RG2', '2026-07-02T01:00:00Z'),
+        report('R3', 'RG3', '2026-07-02T02:00:00Z')]})
+    assert received['count'] == 1
+    assert [(row['position'], row['disposition'], row['reason']) for row in received['lines']] == [
+        (1, 'rejected', 'report_conflict'), (2, 'rejected', 'group_rejected'), (3, 'accepted', None)]
+    # R2 was rejected with its group, so a genuinely new package may still take it.
+    later = client.post('/api/batches', {'batch': 'LATER-BATCH', 'source': 'MUD-DESK',
+                                         'reports': [report('R2', 'RG4', '2026-07-03T00:00:00Z')]})
+    assert later['count'] == 1
+    detail = client.read('/api/batches/SPLIT-BATCH')
+    assert [(row['position'], row['disposition']) for row in detail['lines']] == [
+        (1, 'rejected'), (2, 'rejected'), (3, 'accepted')]
+    revision = client.workspace()['revision']
+    client.post('/api/releases', {'revision': revision})
+    check = client.read(f'/api/releases/{revision}/verify')
+    assert check['matches'] and not check['mismatches']
 
 
 def receipts(client):
@@ -236,4 +352,4 @@ def concurrent_replay(client):
     assert next_page['next_offset'] is None
 
 
-STEPS = (shell, ingest, receipts, link, encounters, routes, coverage, impact, provenance, preview, freeze, compare, export, late_boundaries, concurrent_replay)
+STEPS = (shell, ingest, receipts, link, encounters, routes, coverage, impact, provenance, preview, freeze, compare, export, late_boundaries, concurrent_replay, partial, grouping, stolen, supplement)

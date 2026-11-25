@@ -12,7 +12,7 @@ def header(row):
 
 
 def freeze(connection, revision):
-    snapshot = current(connection)
+    snapshot = current(connection, sealed=True)
     if snapshot['revision'] != revision:
         raise DomainError('stale_revision', '工作数据已变化，请刷新后再封存。', 409)
     if not snapshot['encounters']:
@@ -41,11 +41,21 @@ def verify(connection, revision):
         for candidate in event['candidates']:
             reports.append({key: value for key, value in candidate.items()
                             if key not in ('root', 'proofs', 'priority', 'valid_band')})
-    verified_batches = verify_input_batches(snapshot['batches'], reports)
+    try:
+        verified_batches = verify_input_batches(snapshot['batches'], reports)
+        mismatches = []
+    except DomainError as error:
+        if error.code != 'damaged_batch' or 'mismatches' not in error.details:
+            raise
+        verified_batches = len(snapshot['batches'])
+        mismatches = error.details['mismatches']
     rebuilt = assemble(revision, snapshot['catalog'], snapshot['batches'], reports, snapshot['links'])
     recalculated = digest(canonical(rebuilt))
-    return {**header(row), 'matches': recalculated == row['sha256'], 'recalculated_sha256': recalculated,
-            'verified_batches': verified_batches}
+    digest_matches = recalculated == row['sha256']
+    return {**header(row), 'matches': digest_matches and not mismatches,
+            'digest_matches': digest_matches,
+            'recalculated_sha256': recalculated, 'verified_batches': verified_batches,
+            'mismatches': mismatches}
 
 
 def reconcile(connection, left, right):

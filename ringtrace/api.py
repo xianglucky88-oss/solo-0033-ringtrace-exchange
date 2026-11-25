@@ -41,7 +41,8 @@ class Application:
                 return self.write(path, environ, start)
             raise DomainError('method', '此请求方法不可用。', 405)
         except DomainError as error:
-            return json_response(start, {'error': error.code, 'message': str(error)}, error.status)
+            payload = {'error': error.code, 'message': str(error), **error.details}
+            return json_response(start, payload, error.status)
         except sqlite3.OperationalError as error:
             if (error.sqlite_errorcode & 255) != sqlite3.SQLITE_BUSY:
                 raise
@@ -57,8 +58,8 @@ class Application:
             if path == '/api/releases':
                 return json_response(start, release_repository.headers(connection))
             if match := re.fullmatch('/api/batches/' + IDENTIFIER + r'/source\.json', path):
-                receipt = batch_service.receipt(connection, match[1])
-                payload = batch_archive.verified_payload(receipt, receipt['reports'])
+                receipt = batch_service.stored(connection, match[1])
+                payload = batch_archive.verified_payload(receipt)
                 return attachment(start, payload, 'application/json; charset=utf-8', f'ringtrace-{match[1]}-source.json')
             if match := re.fullmatch('/api/batches/' + IDENTIFIER, path):
                 return json_response(start, batch_service.receipt(connection, match[1]))
